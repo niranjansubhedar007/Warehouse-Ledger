@@ -1,36 +1,101 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Warehouse Ledger
 
-## Getting Started
+Inventory, purchasing, sales/billing and stock tracking for a small warehouse —
+built with Next.js (App Router), Tailwind CSS, and Supabase (Postgres + Auth).
 
-First, run the development server:
+## Stack
+
+- **Next.js 16** (App Router, Turbopack, Server Actions)
+- **Tailwind CSS v4**
+- **Supabase**: Postgres database, Auth (email/password), Row Level Security
+- Real business logic (stock deduction, weighted-average cost, invoice/bill
+  numbering) lives in Postgres functions (`supabase/schema.sql`) so it's atomic
+  and race-safe no matter which client calls it.
+
+## 1. Create your Supabase project
+
+1. Go to [supabase.com](https://supabase.com), create a project (or use an existing one).
+2. In your project dashboard, go to **Settings → API** and copy:
+   - **Project URL**
+   - **anon / public key**
+3. Open `.env.local` in this folder and replace the placeholder values:
+
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+   ```
+
+   with your real project URL and anon key.
+
+## 2. Set up the database
+
+1. In the Supabase dashboard, open **SQL Editor → New query**.
+2. Paste the entire contents of `supabase/schema.sql` and run it.
+   - This creates all tables (`items`, `purchases`, `sales`, `sale_items`,
+     `stock_transactions`, `profiles`), Row Level Security policies, and the
+     `create_purchase` / `delete_purchase` / `create_sale` functions the app
+     calls to keep stock numbers correct.
+   - It also seeds 5 sample items if the `items` table is empty — delete that
+     last block from the script first if you don't want sample data.
+   - The script is safe to re-run.
+
+## 3. Install dependencies & run
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 4. Create your first (admin) user
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Go to `/signup` and create an account with your email and a password.
+   - Every new account starts with the **staff** role (can manage items,
+     purchases, sales and stock, but not Dashboard/Reports).
+2. In the Supabase dashboard, go to **Table Editor → profiles**, find your row,
+   and change `role` from `staff` to `admin`. Now you'll see Dashboard and
+   Reports too after logging back in (or refreshing).
+3. Invite teammates the same way — leave them as `staff`, or promote them the
+   same way if they need admin access.
 
-## Learn More
+If your Supabase project has **email confirmations** turned on (Auth →
+Providers → Email), new sign-ups need to click the confirmation link before
+they can log in. You can turn that off in a dev project under **Auth →
+Settings** if you'd rather skip it while testing.
 
-To learn more about Next.js, take a look at the following resources:
+## Project structure
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+src/
+  app/
+    login/, signup/        — auth pages (Server Actions call Supabase Auth)
+    (app)/                 — everything behind auth, wrapped by AppShell
+      dashboard/           — admin-only: KPIs + sales chart + low-stock preview
+      items/                — Item Master (CRUD)
+      purchase/             — Purchase Master (calls create_purchase / delete_purchase)
+      sales/                — Sales/Billing (calls create_sale)
+      stock/                — Stock levels + Low Stock filter + audit trail
+      reports/              — admin-only: Sales/Purchase/Profit tabs, date range filter
+  components/               — Sidebar, TopBar, AppShell, shared UI (Table, Modal,
+                              SearchBar, Pagination, Toast, icons, bar chart)
+  hooks/usePagedList.ts     — shared search + 10-per-page pagination logic
+  lib/supabase/             — browser client, server client, middleware/session refresh
+  lib/types.ts              — shared TypeScript types
+supabase/schema.sql         — full DB schema, RLS policies, and RPC functions
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Notes / next steps
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Roles**: gating for Dashboard/Reports is enforced both in the UI (hidden
+  nav links, a "Restricted" page if you visit the URL directly) — the
+  underlying tables themselves are readable/writable by any signed-in user,
+  matching how the original prototype worked. If you want staff to be
+  database-blocked from certain tables too, tighten the RLS policies in
+  `schema.sql`.
+- **Generated types**: `src/lib/types.ts` has hand-written types matching the
+  schema. If you want fully generated, always-in-sync types, run
+  `npx supabase gen types typescript --project-id <your-project-id> > src/lib/database.types.ts`
+  (requires the Supabase CLI) and wire it in as the `Database` generic.
+- **Stock transactions table** can grow large over time; the Stock page caps
+  the audit trail fetch at the latest 500 rows.
