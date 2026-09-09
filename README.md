@@ -113,3 +113,4 @@ supabase/schema.sql         — full DB schema, RLS policies, and RPC functions
   (requires the Supabase CLI) and wire it in as the `Database` generic.
 - **Stock transactions table** can grow large over time; the Stock page caps
   the audit trail fetch at the latest 500 rows.
+# Warehouse-Ledger
