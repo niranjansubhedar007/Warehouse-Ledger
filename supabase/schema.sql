@@ -33,6 +33,30 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
+-- Enforce unique, case-insensitive usernames.
+create unique index if not exists profiles_username_key on public.profiles (lower(username));
+
+-- Username-based login: the app collects a username + password, but Supabase
+-- Auth itself only signs in by email. This function looks up the email for a
+-- given username so the login form can resolve it before calling
+-- signInWithPassword. It runs as SECURITY DEFINER so an unauthenticated
+-- visitor can call it (it only ever returns an email address, never a
+-- password or anything else).
+create or replace function public.email_for_username(p_username text)
+returns text
+language sql
+security definer
+set search_path = public, auth
+as $$
+  select u.email
+  from public.profiles p
+  join auth.users u on u.id = p.id
+  where lower(p.username) = lower(p_username)
+  limit 1;
+$$;
+
+grant execute on function public.email_for_username(text) to anon, authenticated;
+
 -- ---------- items ----------
 create table if not exists public.items (
   id uuid primary key default gen_random_uuid(),

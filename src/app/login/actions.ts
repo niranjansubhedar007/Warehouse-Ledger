@@ -7,19 +7,28 @@ export interface AuthActionState {
 }
 
 export async function login(_prevState: AuthActionState | undefined, formData: FormData): Promise<AuthActionState> {
-  const email = String(formData.get("email") || "").trim();
+  const username = String(formData.get("username") || "").trim();
   const password = String(formData.get("password") || "");
   const next = String(formData.get("next") || "/");
 
-  if (!email || !password) {
-    return { error: "Enter your email and password." };
+  if (!username || !password) {
+    return { error: "Enter your username and password." };
   }
 
   const supabase = await createClient();
+
+  const { data: email, error: lookupError } = await supabase.rpc("email_for_username", {
+    p_username: username,
+  });
+
+  if (lookupError || !email) {
+    return { error: "Invalid username or password." };
+  }
+
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    return { error: error.message };
+    return { error: "Invalid username or password." };
   }
 
   redirect(next || "/");

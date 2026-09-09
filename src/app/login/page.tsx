@@ -1,6 +1,5 @@
 "use client";
 import { Suspense, useActionState } from "react";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { login, type AuthActionState } from "./actions";
 import { Lock } from "@/components/icons";
@@ -24,8 +23,8 @@ function LoginForm() {
 
       <input type="hidden" name="next" value={next} />
 
-      <Field label="Email">
-        <input type="email" name="email" required autoComplete="email" className="input" placeholder="you@company.com" />
+      <Field label="Username">
+        <input type="text" name="username" required autoComplete="username" className="input" placeholder="yourusername" />
       </Field>
       <div style={{ height: 12 }} />
       <Field label="Password">
@@ -37,9 +36,6 @@ function LoginForm() {
           {pending ? "Signing in…" : "Log In"}
         </button>
       </div>
-      <p className="login-hint">
-        New here? <Link href="/signup" style={{ color: "var(--blue)" }}>Create an account</Link>
-      </p>
     </form>
   );
 }
