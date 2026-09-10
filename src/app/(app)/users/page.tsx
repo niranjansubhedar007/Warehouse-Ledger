@@ -1,9 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { getSessionProfile } from "@/lib/auth";
 import { RestrictedNotice } from "@/components/RestrictedNotice";
-import { ReportsClient } from "./ReportsClient";
+import { UsersClient } from "./UsersClient";
 
-export default async function ReportsPage() {
+export default async function UsersPage() {
   const supabase = await createClient();
   const user = await getSessionProfile();
   if (!user) return <RestrictedNotice />;
@@ -15,5 +15,10 @@ export default async function ReportsPage() {
 
   if (profile?.role !== "admin") return <RestrictedNotice />;
 
-  return <ReportsClient />;
+  const { data: history } = await supabase
+    .from("profiles")
+    .select("id, username, role, created_at, created_by_username")
+    .order("created_at", { ascending: false });
+
+  return <UsersClient history={history || []} />;
 }

@@ -10,9 +10,16 @@ create extension if not exists pgcrypto;
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   username text,
+  password_hash text,
   role text not null default 'staff' check (role in ('admin','staff')),
+  is_dark_mode boolean not null default false,
   created_at timestamptz not null default now()
 );
+
+alter table public.profiles
+  add column if not exists password_hash text;
+alter table public.profiles
+  add column if not exists is_dark_mode boolean not null default false;
 
 create or replace function public.handle_new_user()
 returns trigger as $$
@@ -324,6 +331,15 @@ begin
   end loop;
 
   v_grand_total := v_subtotal - coalesce(p_discount,0) + coalesce(p_tax,0) + coalesce(p_shipping_charge,0);
+  if coalesce(p_discount, 0) < 0 then
+    raise exception 'Discount cannot be negative';
+  end if;
+  if coalesce(p_discount, 0) > v_subtotal then
+    raise exception 'Discount cannot be more than the subtotal';
+  end if;
+  if v_grand_total < 0 then
+    raise exception 'Grand total cannot be negative';
+  end if;
   update public.sales set subtotal = v_subtotal, grand_total = v_grand_total where id = v_sale.id
     returning * into v_sale;
 

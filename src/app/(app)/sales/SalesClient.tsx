@@ -5,7 +5,7 @@ import type { Item, BillLineInput } from "@/lib/types";
 import { usePagedList } from "@/hooks/usePagedList";
 import { useToast } from "@/components/ToastProvider";
 import { PageHeader, Table, Td, IconBtn, SearchBar, Pagination, Modal, Field } from "@/components/ui";
-import { money, todayISO } from "@/lib/format";
+import { money, normalizeNumberInput, normalizeNumberInputOnInput, todayISO } from "@/lib/format";
 import { Plus, Trash2 } from "@/components/icons";
 
 interface SaleRow {
@@ -155,7 +155,10 @@ function BillForm({
   const [customerName, setCustomerName] = useState("");
   const [customerMobile, setCustomerMobile] = useState("");
   const [date, setDate] = useState(todayISO());
-  const [lines, setLines] = useState<BillLineInput[]>([]);
+  const [lines, setLines] = useState<BillLineInput[]>(() => {
+    const first = activeItems[0];
+    return first ? [{ item_id: first.id, quantity: 1, selling_price: first.selling_price }] : [];
+  });
   const [discount, setDiscount] = useState(0);
   const [tax, setTax] = useState(0);
   const [shippingCharge, setShippingCharge] = useState(0);
@@ -175,7 +178,12 @@ function BillForm({
     return s + ln.quantity * (item ? item.shipping_weight : 0);
   }, 0);
   const grandTotal = subtotal - Number(discount || 0) + Number(tax || 0) + Number(shippingCharge || 0);
-  const canSave = customerName && lines.length > 0 && lines.every((l) => l.quantity > 0);
+  const discountError = discount < 0
+    ? "Discount cannot be negative."
+    : discount > subtotal
+      ? `Discount cannot be more than the subtotal of ${money(subtotal)}.`
+      : "";
+  const canSave = Boolean(customerName.trim()) && lines.length > 0 && lines.every((l) => l.quantity > 0) && !discountError;
 
   return (
     <Modal title="New Bill" onClose={onClose} wide>
@@ -184,7 +192,7 @@ function BillForm({
           <input className="input" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
         </Field>
         <Field label="Customer Mobile">
-          <input className="input" value={customerMobile} onChange={(e) => setCustomerMobile(e.target.value)} />
+          <input className="input" maxLength={10} value={customerMobile} onChange={(e) => setCustomerMobile(e.target.value)} />
         </Field>
         <Field label="Bill Date">
           <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -230,10 +238,10 @@ function BillForm({
                       {over && <div className="hint-danger">Only {item?.current_stock} units available.</div>}
                     </td>
                     <td>
-                      <input type="number" min={1} className="input" value={ln.quantity} onChange={(e) => updateLine(idx, { quantity: Number(e.target.value) })} />
+                      <input type="number" min={1} className="input" value={ln.quantity} onInput={normalizeNumberInputOnInput} onChange={(e) => updateLine(idx, { quantity: Number(normalizeNumberInput(e.target.value) || 0) })} />
                     </td>
                     <td>
-                      <input type="number" min={0} className="input" value={ln.selling_price} onChange={(e) => updateLine(idx, { selling_price: Number(e.target.value) })} />
+                      <input type="number" min={0} className="input" value={ln.selling_price} onInput={normalizeNumberInputOnInput} onChange={(e) => updateLine(idx, { selling_price: Number(normalizeNumberInput(e.target.value) || 0) })} />
                     </td>
                     <td className="num">{lineWeight} kg</td>
                     <td className="num">{money(ln.quantity * ln.selling_price)}</td>
@@ -266,13 +274,14 @@ function BillForm({
 
       <div className="form-grid-3" style={{ marginBottom: 16 }}>
         <Field label="Discount ₹">
-          <input type="number" className="input" value={discount} onChange={(e) => setDiscount(Number(e.target.value))} />
+          <input type="number" className="input" value={discount} onInput={normalizeNumberInputOnInput} onChange={(e) => setDiscount(Number(normalizeNumberInput(e.target.value) || 0))} />
+          {discountError && <div className="hint-danger">{discountError}</div>}
         </Field>
         <Field label="Tax ₹">
-          <input type="number" className="input" value={tax} onChange={(e) => setTax(Number(e.target.value))} />
+          <input type="number" className="input" value={tax} onInput={normalizeNumberInputOnInput} onChange={(e) => setTax(Number(normalizeNumberInput(e.target.value) || 0))} />
         </Field>
         <Field label="Shipping Charge ₹">
-          <input type="number" className="input" value={shippingCharge} onChange={(e) => setShippingCharge(Number(e.target.value))} />
+          <input type="number" className="input" value={shippingCharge} onInput={normalizeNumberInputOnInput} onChange={(e) => setShippingCharge(Number(normalizeNumberInput(e.target.value) || 0))} />
         </Field>
       </div>
 

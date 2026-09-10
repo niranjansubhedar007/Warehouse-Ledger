@@ -1,19 +1,40 @@
 "use client";
-import { Bell, LogOut, Menu } from "@/components/icons";
+import { useEffect, useState } from "react";
+import { Bell, LogOut, Menu, Moon, Sun } from "@/components/icons";
+import { createClient } from "@/lib/supabase/client";
 
 export function TopBar({
+  profileId,
+  isDarkMode: initialDarkMode,
   username,
   role,
   lowCount,
   onToggleSidebar,
   onLogout,
 }: {
+  profileId: string | number;
+  isDarkMode: boolean;
   username: string;
   role: string;
   lowCount: number;
   onToggleSidebar: () => void;
   onLogout: () => void;
 }) {
+  const [darkMode, setDarkMode] = useState(initialDarkMode);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light");
+  }, [darkMode]);
+
+  const toggleTheme = async () => {
+    const nextDarkMode = !darkMode;
+    setDarkMode(nextDarkMode);
+    document.documentElement.setAttribute("data-theme", nextDarkMode ? "dark" : "light");
+    const supabase = createClient();
+    const { error } = await supabase.from("profiles").update({ is_dark_mode: nextDarkMode }).eq("id", profileId);
+    if (error) setDarkMode(!nextDarkMode);
+  };
+
   return (
     <div className="topbar">
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -30,6 +51,14 @@ export function TopBar({
         <div className="topbar-alert">
           <Bell size={15} /> Low Stock: {lowCount}
         </div>
+        <button
+          onClick={toggleTheme}
+          className="icon-btn theme-toggle"
+          aria-label={darkMode ? "Switch to light theme" : "Switch to dark theme"}
+          title={darkMode ? "Switch to light theme" : "Switch to dark theme"}
+        >
+          {darkMode ? <Sun size={16} /> : <Moon size={16} />}
+        </button>
         <button onClick={onLogout} className="topbar-logout">
           <LogOut size={14} /> Logout
         </button>

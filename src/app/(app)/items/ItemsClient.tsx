@@ -6,6 +6,7 @@ import { usePagedList } from "@/hooks/usePagedList";
 import { useToast } from "@/components/ToastProvider";
 import { PageHeader, Table, Td, Badge, IconBtn, SearchBar, Pagination, Modal, Field } from "@/components/ui";
 import { money } from "@/lib/format";
+import { normalizeNumberInput, normalizeNumberInputOnInput } from "@/lib/format";
 import { Plus, Pencil, Trash2 } from "@/components/icons";
 
 type ItemFormValues = Omit<Item, "id" | "created_at">;
@@ -171,19 +172,19 @@ function ItemForm({
           <input className="input" value={form.name} onChange={(e) => set("name", e.target.value)} />
         </Field>
         <Field label="Purchase Price">
-          <input type="number" className="input" value={form.purchase_price} onChange={(e) => set("purchase_price", Number(e.target.value))} />
+          <input type="number" className="input" value={form.purchase_price} onInput={normalizeNumberInputOnInput} onChange={(e) => set("purchase_price", Number(normalizeNumberInput(e.target.value) || 0))} />
         </Field>
         <Field label="Selling Price">
-          <input type="number" className="input" value={form.selling_price} onChange={(e) => set("selling_price", Number(e.target.value))} />
+          <input type="number" className="input" value={form.selling_price} onInput={normalizeNumberInputOnInput} onChange={(e) => set("selling_price", Number(normalizeNumberInput(e.target.value) || 0))} />
         </Field>
         <Field label="Shipping Weight (kg)">
-          <input type="number" className="input" value={form.shipping_weight} onChange={(e) => set("shipping_weight", Number(e.target.value))} />
+          <input type="number" className="input" value={form.shipping_weight} onInput={normalizeNumberInputOnInput} onChange={(e) => set("shipping_weight", Number(normalizeNumberInput(e.target.value) || 0))} />
         </Field>
         <Field label="Current Stock">
-          <input type="number" className="input" value={form.current_stock} onChange={(e) => set("current_stock", Number(e.target.value))} />
+          <input type="number" className="input" value={form.current_stock} onInput={normalizeNumberInputOnInput} onChange={(e) => set("current_stock", Number(normalizeNumberInput(e.target.value) || 0))} />
         </Field>
         <Field label="Low Stock Threshold">
-          <input type="number" className="input" value={form.low_stock_threshold} onChange={(e) => set("low_stock_threshold", Number(e.target.value))} />
+          <input type="number" className="input" value={form.low_stock_threshold} onInput={normalizeNumberInputOnInput} onChange={(e) => set("low_stock_threshold", Number(normalizeNumberInput(e.target.value) || 0))} />
         </Field>
         <Field label="Status">
           <select className="input" value={form.status} onChange={(e) => set("status", e.target.value as Item["status"])}>

@@ -62,4 +62,19 @@ export const Bell = (p: IconProps) => (
 export const Lock = (p: IconProps) => (
   <Icon {...p}><rect x="4.5" y="10.5" width="15" height="10" rx="2" /><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" /></Icon>
 );
+export const Eye = (p: IconProps) => (
+  <Icon {...p}><path d="M2.5 12s3.4-5 9.5-5 9.5 5 9.5 5-3.4 5-9.5 5-9.5-5-9.5-5z" /><circle cx="12" cy="12" r="2.2" /></Icon>
+);
+export const EyeOff = (p: IconProps) => (
+  <Icon {...p}><path d="m3 3 18 18" /><path d="M10.6 6.2A10.8 10.8 0 0 1 12 6c6.1 0 9.5 6 9.5 6a17 17 0 0 1-3.1 3.5M6.2 6.8C3.9 8.2 2.5 12 2.5 12s3.4 6 9.5 6a9.8 9.8 0 0 0 3-.5" /><path d="M9.9 9.9a2.2 2.2 0 0 0 3.1 3.1" /></Icon>
+);
+export const Sun = (p: IconProps) => (
+  <Icon {...p}><circle cx="12" cy="12" r="4" /><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4" /></Icon>
+);
+export const Moon = (p: IconProps) => (
+  <Icon {...p}><path d="M20.5 15.2A8.5 8.5 0 0 1 8.8 3.5 8.5 8.5 0 1 0 20.5 15.2z" /></Icon>
+);
 export const Menu = (p: IconProps) => <Icon {...p}><path d="M4 6.5h16M4 12h16M4 17.5h16" /></Icon>;
+export const UserPlus = (p: IconProps) => (
+  <Icon {...p}><path d="M15 20.5v-1.2a4.8 4.8 0 0 0-4.8-4.8H6.8A4.8 4.8 0 0 0 2 19.3v1.2" /><circle cx="8.5" cy="7.2" r="3.7" /><path d="M19 8v6M16 11h6" /></Icon>
+);

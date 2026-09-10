@@ -5,7 +5,7 @@ import type { Item, Purchase } from "@/lib/types";
 import { usePagedList } from "@/hooks/usePagedList";
 import { useToast } from "@/components/ToastProvider";
 import { PageHeader, Table, Td, IconBtn, SearchBar, Pagination, Modal, Field } from "@/components/ui";
-import { money, todayISO } from "@/lib/format";
+import { money, normalizeNumberInput, normalizeNumberInputOnInput, todayISO } from "@/lib/format";
 import { Plus, Trash2 } from "@/components/icons";
 
 export function PurchaseClient() {
@@ -162,10 +162,10 @@ function PurchaseForm({
           </select>
         </Field>
         <Field label="Quantity">
-          <input type="number" className="input" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+          <input type="number" className="input" value={quantity} onInput={normalizeNumberInputOnInput} onChange={(e) => setQuantity(normalizeNumberInput(e.target.value))} />
         </Field>
         <Field label="Purchase Price">
-          <input type="number" className="input" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value)} />
+          <input type="number" className="input" value={purchasePrice} onInput={normalizeNumberInputOnInput} onChange={(e) => setPurchasePrice(normalizeNumberInput(e.target.value))} />
         </Field>
       </div>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 }}>

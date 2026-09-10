@@ -9,6 +9,7 @@ import {
   Receipt,
   Boxes,
   FileBarChart,
+  UserPlus,
   X,
 } from "@/components/icons";
 
@@ -26,6 +27,7 @@ export const NAV: NavItem[] = [
   { href: "/sales", label: "Sales / Billing", icon: Receipt },
   { href: "/stock", label: "Stock", icon: Boxes },
   { href: "/reports", label: "Reports", icon: FileBarChart, adminOnly: true },
+  { href: "/users", label: "User Management", icon: UserPlus, adminOnly: true },
 ];
 
 export function Sidebar({

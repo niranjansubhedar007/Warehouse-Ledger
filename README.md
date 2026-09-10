@@ -22,7 +22,7 @@ built with Next.js (App Router), Tailwind CSS, and Supabase (Postgres + Auth).
 
    ```
    NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+  NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
    ```
 
    with your real project URL and anon key.

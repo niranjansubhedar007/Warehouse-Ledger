@@ -3,7 +3,9 @@ export type Role = "admin" | "staff";
 export interface Profile {
   id: string;
   username: string | null;
+  password_hash: string | null;
   role: Role;
+  is_dark_mode: boolean;
   created_at: string;
 }
 
