@@ -25,6 +25,10 @@ function LoginForm() {
   const next = searchParams.get("next") || "/";
 
   useEffect(() => {
+    document.documentElement.setAttribute("data-theme", "light");
+  }, []);
+
+  useEffect(() => {
     if (!state?.error) return;
     showToast(state.error, "error");
   }, [state?.error, showToast]);
@@ -64,20 +68,20 @@ function LoginForm() {
         <button
           type="button"
           role="tab"
-          aria-selected={loginRole === "staff"}
-          className={loginRole === "staff" ? "active" : ""}
-          onClick={() => setLoginRole("staff")}
-        >
-          Staff Login
-        </button>
-        <button
-          type="button"
-          role="tab"
           aria-selected={loginRole === "admin"}
           className={loginRole === "admin" ? "active" : ""}
           onClick={() => setLoginRole("admin")}
         >
           Admin Login
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={loginRole === "staff"}
+          className={loginRole === "staff" ? "active" : ""}
+          onClick={() => setLoginRole("staff")}
+        >
+          Staff Login
         </button>
       </div>
 
@@ -109,7 +113,7 @@ function LoginForm() {
         Forgot password?
       </button>
       {showRecovery && (
-        <Modal title="Reset Password" onClose={() => setShowRecovery(false)}>
+        <Modal title="Reset Password" onClose={() => setShowRecovery(false)} className="login-recovery-modal">
           <div className="login-recovery-form">
             <p className="login-recovery-text">Verify your username, email, and phone number to choose a new password.</p>
             <Field label="Username"><input className="input" value={recoveryUsername} onChange={(e) => setRecoveryUsername(e.target.value)} autoComplete="off" /></Field>

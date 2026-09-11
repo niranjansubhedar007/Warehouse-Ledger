@@ -89,15 +89,17 @@ export function Modal({
   children,
   onClose,
   wide,
+  className = "",
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
+  className?: string;
 }) {
   return (
     <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className={`modal ${wide ? "wide" : ""}`}>
+      <div className={`modal ${wide ? "wide" : ""} ${className}`}>
         <div className="modal-head">
           <h3>{title}</h3>
           <button type="button" onClick={onClose} aria-label="Close">
