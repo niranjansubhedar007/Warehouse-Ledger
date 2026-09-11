@@ -17,7 +17,7 @@ export default async function UsersPage() {
 
   const { data: history } = await supabase
     .from("profiles")
-    .select("id, username, role, created_at, created_by_username")
+    .select("id, username, email, phone_number, role, created_at, created_by_username")
     .order("created_at", { ascending: false });
 
   return <UsersClient history={history || []} />;

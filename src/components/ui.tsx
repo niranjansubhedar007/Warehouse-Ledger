@@ -75,10 +75,10 @@ export function IconBtn({
   );
 }
 
-export function Field({ label, children }: { label: string; children: ReactNode }) {
+export function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
   return (
     <label style={{ display: "block" }}>
-      <div className="field-label">{label}</div>
+      <div className="field-label">{label}{required && <span className="required-mark" aria-hidden="true"> *</span>}</div>
       {children}
     </label>
   );

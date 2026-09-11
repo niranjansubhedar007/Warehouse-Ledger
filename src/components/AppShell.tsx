@@ -2,7 +2,6 @@
 import { useState, type ReactNode } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { TopBar } from "@/components/TopBar";
-import { ToastProvider } from "@/components/ToastProvider";
 import { Modal } from "@/components/ui";
 import { logout } from "@/app/login/actions";
 
@@ -35,8 +34,7 @@ export function AppShell({
   };
 
   return (
-    <ToastProvider>
-      <div className={`shell ${sidebarOpen ? "" : "sidebar-collapsed"}`}>
+    <div className={`shell ${sidebarOpen ? "" : "sidebar-collapsed"}`}>
         <Sidebar
           role={role}
           lowCount={lowCount}
@@ -56,7 +54,6 @@ export function AppShell({
           />
           <div className="content">{children}</div>
         </main>
-      </div>
       {showLogoutConfirm && (
         <Modal title="Confirm Logout" onClose={() => setShowLogoutConfirm(false)}>
           <p style={{ margin: "0 0 20px", color: "var(--text-dim)", fontSize: 13 }}>
@@ -72,6 +69,6 @@ export function AppShell({
           </div>
         </Modal>
       )}
-    </ToastProvider>
+    </div>
   );
 }

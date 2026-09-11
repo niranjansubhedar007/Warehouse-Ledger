@@ -1,16 +1,19 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { PageHeader, Field, Pagination, SearchBar, Modal } from "@/components/ui";
 import { Eye, EyeOff, Pencil, Trash2 } from "@/components/icons";
 import { createUser, type CreateUserState } from "./actions";
 import { usePagedList } from "@/hooks/usePagedList";
 import { createClient } from "@/lib/supabase/client";
+import { useToast } from "@/components/ToastProvider";
 
 type UserHistory = {
   id: string | number;
   username: string | null;
+  email: string | null;
+  phone_number: string | null;
   role: string;
   created_at: string;
   created_by_username: string | null;
@@ -25,14 +28,21 @@ export function UsersClient({ history }: { history: UserHistory[] }) {
   const [password, setPassword] = useState("");
   const [editingUser, setEditingUser] = useState<UserHistory | null>(null);
   const [editUsername, setEditUsername] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editPhoneNumber, setEditPhoneNumber] = useState("");
   const [editRole, setEditRole] = useState("staff");
   const [editPassword, setEditPassword] = useState("");
   const [editPasswordVisible, setEditPasswordVisible] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [deleteUser, setDeleteUser] = useState<UserHistory | null>(null);
-  const [actionError, setActionError] = useState("");
+  const showToast = useToast();
   const router = useRouter();
   const supabase = createClient();
+
+  useEffect(() => {
+    if (state.error) showToast(state.error, "error");
+    if (state.success) showToast(state.success, "success");
+  }, [state.error, state.success, showToast]);
 
   const passwordStrength = password.length >= 12 && /[A-Z]/.test(password) && /[a-z]/.test(password) && /\d/.test(password) && /[^A-Za-z0-9]/.test(password)
     ? "high"
@@ -43,13 +53,16 @@ export function UsersClient({ history }: { history: UserHistory[] }) {
     history,
     (user, search) =>
       (user.username || "").toLowerCase().includes(search) ||
-      user.role.toLowerCase().includes(search) ||
-      (user.created_by_username || "").toLowerCase().includes(search)
+      (user.email || "").toLowerCase().includes(search) ||
+      (user.phone_number || "").includes(search) ||
+      user.role.toLowerCase().includes(search)
   );
 
   const openEdit = (user: UserHistory) => {
     setEditingUser(user);
     setEditUsername(user.username || "");
+    setEditEmail(user.email || "");
+    setEditPhoneNumber(user.phone_number || "");
     setEditRole(user.role);
     setEditPassword("");
   };
@@ -60,12 +73,14 @@ export function UsersClient({ history }: { history: UserHistory[] }) {
     const { error } = await supabase.rpc("update_profile_user", {
       p_id: Number(editingUser.id),
       p_username: editUsername.trim().toLowerCase(),
+      p_email: editEmail.trim().toLowerCase(),
+      p_phone_number: editPhoneNumber.trim(),
       p_role: editRole,
       p_password: editPassword || null,
     });
     setEditSaving(false);
     if (error) {
-      setActionError(error.message);
+      showToast(error.message, "error");
       return;
     }
     setEditingUser(null);
@@ -79,7 +94,7 @@ export function UsersClient({ history }: { history: UserHistory[] }) {
     const { error } = await supabase.rpc("delete_profile_user", { p_id: Number(deleteUser.id) });
     if (error) {
       setDeleteUser(null);
-      setActionError(error.message);
+      showToast(error.message, "error");
       return;
     }
     setDeleteUser(null);
@@ -109,7 +124,7 @@ export function UsersClient({ history }: { history: UserHistory[] }) {
           <p>The user will sign in with this username and password.</p>
         </div>
         <form action={formAction} className="user-form" autoComplete="off">
-          <Field label="Username">
+          <Field label="Username" required>
             <input
               name="username"
               className="input"
@@ -123,7 +138,13 @@ export function UsersClient({ history }: { history: UserHistory[] }) {
               pattern="[A-Za-z0-9][A-Za-z0-9._-]{2,31}"
             />
           </Field>
-          <Field label="Password">
+          <Field label="Email" required>
+            <input name="email" type="email" className="input" placeholder="name@company.com" autoComplete="off" required />
+          </Field>
+          <Field label="Phone Number" required>
+            <input name="phone_number" maxLength={10} type="tel" className="input" placeholder="+91 9876543210" autoComplete="off" required />
+          </Field>
+          <Field label="Password" required>
             <div className="password-input-wrap">
               <input
                 name="password"
@@ -150,15 +171,12 @@ export function UsersClient({ history }: { history: UserHistory[] }) {
               <span className="password-strength-label">{password ? `${passwordStrength[0].toUpperCase()}${passwordStrength.slice(1)} password` : "Use 8+ characters with numbers"}</span>
             </div>
           </Field>
-          <Field label="Role">
+          <Field label="Role" required>
             <select name="role" className="input" defaultValue="staff">
               <option value="staff">Staff</option>
               <option value="admin">Admin</option>
             </select>
           </Field>
-
-          {state.error && <div className="login-error">{state.error}</div>}
-          {state.success && <div className="user-success">{state.success}</div>}
 
           <button type="submit" className="btn-primary" disabled={pending || passwordStrength === "low"}>
             {pending ? "Creating User..." : "Create User"}
@@ -172,20 +190,22 @@ export function UsersClient({ history }: { history: UserHistory[] }) {
             <p>Accounts and who created them.</p>
           </div>
           <div className="list-toolbar">
-            <SearchBar value={query} onChange={setQuery} placeholder="Search user, role or creator" />
+            <SearchBar value={query} onChange={setQuery} placeholder="Search user, email, phone or role" />
           </div>
           <div className="table-scroll">
             <table className="data-table user-history-table">
               <thead>
-                <tr><th>Sr</th><th>User</th><th>Role</th><th>Created</th><th>By</th><th></th></tr>
+                <tr><th>Sr</th><th>User</th><th>Email</th><th>Phone</th><th>Role</th><th>Created</th><th>By</th><th></th></tr>
               </thead>
               <tbody>
                 {history.length === 0 ? (
-                  <tr><td colSpan={6} className="text-muted">No users yet.</td></tr>
+                  <tr><td colSpan={8} className="text-muted">No users yet.</td></tr>
                 ) : paged.map((user, index) => (
                   <tr key={user.id}>
                     <td className="text-muted">{(page - 1) * pageSize + index + 1}</td>
                     <td className="strong">{user.username || "—"}</td>
+                    <td className="text-muted">{user.email || "—"}</td>
+                    <td className="text-muted">{user.phone_number || "—"}</td>
                     <td><span className={`badge ${user.role === "admin" ? "active" : "inactive"}`}>{user.role}</span></td>
                     <td className="text-muted">{new Date(user.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</td>
                     <td className="text-muted">{user.created_by_username || "System"}</td>
@@ -205,10 +225,16 @@ export function UsersClient({ history }: { history: UserHistory[] }) {
       {editingUser && (
         <Modal title="Edit User" onClose={() => setEditingUser(null)}>
           <div className="user-form">
-            <Field label="Username">
+            <Field label="Username" required>
               <input className="input" value={editUsername} onChange={(event) => setEditUsername(event.target.value)} autoComplete="off" />
             </Field>
-            <Field label="Role">
+            <Field label="Email" required>
+              <input className="input" type="email" value={editEmail} onChange={(event) => setEditEmail(event.target.value)} autoComplete="off" required />
+            </Field>
+            <Field label="Phone Number" required>
+              <input className="input" type="tel" maxLength={10} value={editPhoneNumber} onChange={(event) => setEditPhoneNumber(event.target.value)} autoComplete="off" required />
+            </Field>
+            <Field label="Role" required>
               <select className="input" value={editRole} onChange={(event) => setEditRole(event.target.value)}>
                 <option value="staff">Staff</option>
                 <option value="admin">Admin</option>
@@ -237,14 +263,6 @@ export function UsersClient({ history }: { history: UserHistory[] }) {
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
             <button type="button" className="btn-secondary" onClick={() => setDeleteUser(null)}>Cancel</button>
             <button type="button" className="btn-primary" onClick={confirmDelete}>Delete User</button>
-          </div>
-        </Modal>
-      )}
-      {actionError && (
-        <Modal title="Action Failed" onClose={() => setActionError("")}>
-          <p style={{ margin: "0 0 20px", color: "var(--text-dim)", fontSize: 13 }}>{actionError}</p>
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button type="button" className="btn-primary" onClick={() => setActionError("")}>Close</button>
           </div>
         </Modal>
       )}

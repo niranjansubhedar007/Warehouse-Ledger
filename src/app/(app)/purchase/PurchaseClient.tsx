@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Item, Purchase } from "@/lib/types";
-import { usePagedList } from "@/hooks/usePagedList";
+import { useServerPagedList } from "@/hooks/useServerPagedList";
 import { useToast } from "@/components/ToastProvider";
 import { PageHeader, Table, Td, IconBtn, SearchBar, Pagination, Modal, Field } from "@/components/ui";
 import { money, normalizeNumberInput, normalizeNumberInputOnInput, todayISO } from "@/lib/format";
@@ -12,37 +12,33 @@ export function PurchaseClient() {
   const supabase = createClient();
   const showToast = useToast();
   const [items, setItems] = useState<Item[]>([]);
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
-  const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState<Purchase | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const [itemsRes, purchasesRes] = await Promise.all([
-      supabase.from("items").select("*").order("name"),
-      supabase.from("purchases").select("*").order("created_at", { ascending: false }),
-    ]);
+  const loadItems = useCallback(async () => {
+    const itemsRes = await supabase.from("items").select("*").order("name");
     if (itemsRes.error) showToast(itemsRes.error.message);
     else setItems(itemsRes.data as Item[]);
-    if (purchasesRes.error) showToast(purchasesRes.error.message);
-    else setPurchases(purchasesRes.data as Purchase[]);
-    setLoading(false);
   }, [supabase, showToast]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    loadItems();
+  }, [loadItems]);
+
+  const loadPage = useCallback(async (page: number, query: string) => {
+    const from = (page - 1) * 10;
+    let request = supabase.from("purchases").select("*", { count: "exact" }).order("created_at", { ascending: false }).range(from, from + 9);
+    if (query.trim()) request = request.or(`invoice_number.ilike.%${query.trim()}%,supplier.ilike.%${query.trim()}%`);
+    const purchasesRes = await request;
+    if (purchasesRes.error) showToast(purchasesRes.error.message, "error");
+    return { data: (purchasesRes.data || []) as Purchase[], total: purchasesRes.count || 0 };
+  }, [supabase, showToast]);
+  const purchasesList = useServerPagedList(loadPage);
+  const { data: paged, loading, reload: load, query, setQuery, page, setPage, totalPages, totalCount, pageSize } = purchasesList;
+  const purchases = paged;
 
   const itemName = (id: string) => items.find((i) => i.id === id)?.name || "—";
-
-  const { query, setQuery, page, setPage, totalPages, paged, totalCount, pageSize } = usePagedList(
-    purchases,
-    (p, q) =>
-      p.invoice_number.toLowerCase().includes(q) ||
-      p.supplier.toLowerCase().includes(q) ||
-      itemName(p.item_id).toLowerCase().includes(q)
-  );
 
   const addPurchase = async (form: { supplier: string; item_id: string; quantity: number; purchase_price: number; date: string }) => {
     setSaving(true);
@@ -58,17 +54,19 @@ export function PurchaseClient() {
       showToast(error.message);
       return;
     }
-    showToast("Purchase recorded and stock updated.", "success");
+    showToast("Purchase recorded successfully and stock updated.", "success");
     setAdding(false);
     load();
   };
 
-  const deletePurchase = async (p: Purchase) => {
-    if (!confirm(`Delete purchase ${p.invoice_number}? Stock will be reversed.`)) return;
+  const deletePurchase = async () => {
+    if (!deleting) return;
+    const p = deleting;
     const { error } = await supabase.rpc("delete_purchase", { p_purchase_id: p.id });
+    setDeleting(null);
     if (error) showToast(error.message);
     else {
-      showToast("Purchase deleted.", "success");
+      showToast("Purchase deleted successfully and stock reversed.", "success");
       load();
     }
   };
@@ -105,7 +103,7 @@ export function PurchaseClient() {
                   <Td className="num">{money(p.total_amount)}</Td>
                   <Td className="num">{p.shipping_weight} kg</Td>
                   <Td>
-                    <IconBtn onClick={() => deletePurchase(p)}>
+                    <IconBtn onClick={() => setDeleting(p)}>
                       <Trash2 size={14} />
                     </IconBtn>
                   </Td>
@@ -119,6 +117,17 @@ export function PurchaseClient() {
 
       {adding && (
         <PurchaseForm items={items} saving={saving} onSave={addPurchase} onClose={() => setAdding(false)} />
+      )}
+      {deleting && (
+        <Modal title="Confirm Delete" onClose={() => setDeleting(null)}>
+          <p style={{ margin: "0 0 20px", color: "var(--text-dim)", fontSize: 13 }}>
+            Delete purchase <strong>{deleting.invoice_number}</strong>? Stock will be reversed.
+          </p>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <button type="button" className="btn-secondary" onClick={() => setDeleting(null)}>Cancel</button>
+            <button type="button" className="btn-primary" onClick={deletePurchase}>Delete Purchase</button>
+          </div>
+        </Modal>
       )}
     </div>
   );
@@ -146,13 +155,13 @@ function PurchaseForm({
   return (
     <Modal title="New Purchase" onClose={onClose}>
       <div className="form-grid-2">
-        <Field label="Purchase Date">
+        <Field label="Purchase Date" required>
           <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} />
         </Field>
-        <Field label="Supplier Name">
+        <Field label="Supplier Name" required>
           <input className="input" value={supplier} onChange={(e) => setSupplier(e.target.value)} />
         </Field>
-        <Field label="Item">
+        <Field label="Item" required>
           <select className="input" value={itemId} onChange={(e) => setItemId(e.target.value)}>
             {items.map((i) => (
               <option key={i.id} value={i.id}>
@@ -161,10 +170,10 @@ function PurchaseForm({
             ))}
           </select>
         </Field>
-        <Field label="Quantity">
+        <Field label="Quantity" required>
           <input type="number" className="input" value={quantity} onInput={normalizeNumberInputOnInput} onChange={(e) => setQuantity(normalizeNumberInput(e.target.value))} />
         </Field>
-        <Field label="Purchase Price">
+        <Field label="Purchase Price" required>
           <input type="number" className="input" value={purchasePrice} onInput={normalizeNumberInputOnInput} onChange={(e) => setPurchasePrice(normalizeNumberInput(e.target.value))} />
         </Field>
       </div>

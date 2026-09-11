@@ -1,8 +1,8 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Item } from "@/lib/types";
-import { usePagedList } from "@/hooks/usePagedList";
+import { useServerPagedList } from "@/hooks/useServerPagedList";
 import { useToast } from "@/components/ToastProvider";
 import { PageHeader, Table, Td, Badge, IconBtn, SearchBar, Pagination, Modal, Field } from "@/components/ui";
 import { money } from "@/lib/format";
@@ -14,50 +14,46 @@ type ItemFormValues = Omit<Item, "id" | "created_at">;
 export function ItemsClient() {
   const supabase = createClient();
   const showToast = useToast();
-  const [items, setItems] = useState<Item[]>([]);
-  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Item | "new" | null>(null);
+  const [removing, setRemoving] = useState<Item | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const { data, error } = await supabase.from("items").select("*").order("name");
-    if (error) showToast(error.message);
-    else setItems(data as Item[]);
-    setLoading(false);
+  const loadPage = useCallback(async (page: number, query: string) => {
+    const from = (page - 1) * 10;
+    let request = supabase.from("items").select("*", { count: "exact" }).order("name").range(from, from + 9);
+    if (query.trim()) request = request.ilike("name", `%${query.trim()}%`);
+    const { data, error, count } = await request;
+    if (error) showToast(error.message, "error");
+    return { data: (data || []) as Item[], total: count || 0 };
   }, [supabase, showToast]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const { query, setQuery, page, setPage, totalPages, paged, totalCount, pageSize } = usePagedList(
-    items,
-    (i, q) => i.name.toLowerCase().includes(q)
-  );
+  const itemsList = useServerPagedList(loadPage);
+  const { data: paged, loading, reload: load, query, setQuery, page, setPage, totalPages, totalCount, pageSize } = itemsList;
+  const items = paged;
 
   const save = async (form: ItemFormValues, id?: string) => {
     setSaving(true);
     if (id) {
       const { error } = await supabase.from("items").update(form).eq("id", id);
       if (error) showToast(error.message);
-      else showToast(`Updated ${form.name}.`, "success");
+      else showToast(`Item "${form.name}" updated successfully.`, "success");
     } else {
       const { error } = await supabase.from("items").insert(form);
       if (error) showToast(error.message);
-      else showToast(`Added ${form.name} to Item Master.`, "success");
+      else showToast(`Item "${form.name}" added successfully.`, "success");
     }
     setSaving(false);
     setEditing(null);
-    load();
+    await load();
   };
 
-  const remove = async (item: Item) => {
-    if (!confirm(`Remove ${item.name}? This cannot be undone.`)) return;
+  const remove = async () => {
+    if (!removing) return;
+    const item = removing;
     const { error } = await supabase.from("items").delete().eq("id", item.id);
+    setRemoving(null);
     if (error) showToast(error.message);
     else {
-      showToast(`Removed ${item.name}.`, "success");
+      showToast(`Item "${item.name}" removed successfully.`, "success");
       load();
     }
   };
@@ -105,7 +101,7 @@ export function ItemsClient() {
                       <IconBtn onClick={() => setEditing(i)}>
                         <Pencil size={14} />
                       </IconBtn>
-                      <IconBtn onClick={() => remove(i)}>
+                      <IconBtn onClick={() => setRemoving(i)}>
                         <Trash2 size={14} />
                       </IconBtn>
                     </div>
@@ -125,6 +121,17 @@ export function ItemsClient() {
           onSave={(form) => save(form, editing === "new" ? undefined : editing.id)}
           onClose={() => setEditing(null)}
         />
+      )}
+      {removing && (
+        <Modal title="Confirm Remove" onClose={() => setRemoving(null)}>
+          <p style={{ margin: "0 0 20px", color: "var(--text-dim)", fontSize: 13 }}>
+            Remove <strong>{removing.name}</strong>? This action cannot be undone.
+          </p>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <button type="button" className="btn-secondary" onClick={() => setRemoving(null)}>Cancel</button>
+            <button type="button" className="btn-primary" onClick={remove}>Remove Item</button>
+          </div>
+        </Modal>
       )}
     </div>
   );
@@ -168,25 +175,25 @@ function ItemForm({
   return (
     <Modal title={item ? "Edit Item" : "Add Item"} onClose={onClose}>
       <div className="form-grid-2">
-        <Field label="Item Name">
+        <Field label="Item Name" required>
           <input className="input" value={form.name} onChange={(e) => set("name", e.target.value)} />
         </Field>
-        <Field label="Purchase Price">
+        <Field label="Purchase Price" required>
           <input type="number" className="input" value={form.purchase_price} onInput={normalizeNumberInputOnInput} onChange={(e) => set("purchase_price", Number(normalizeNumberInput(e.target.value) || 0))} />
         </Field>
-        <Field label="Selling Price">
+        <Field label="Selling Price" required>
           <input type="number" className="input" value={form.selling_price} onInput={normalizeNumberInputOnInput} onChange={(e) => set("selling_price", Number(normalizeNumberInput(e.target.value) || 0))} />
         </Field>
-        <Field label="Shipping Weight (kg)">
+        <Field label="Shipping Weight (kg)" required>
           <input type="number" className="input" value={form.shipping_weight} onInput={normalizeNumberInputOnInput} onChange={(e) => set("shipping_weight", Number(normalizeNumberInput(e.target.value) || 0))} />
         </Field>
-        <Field label="Current Stock">
+        <Field label="Current Stock" required>
           <input type="number" className="input" value={form.current_stock} onInput={normalizeNumberInputOnInput} onChange={(e) => set("current_stock", Number(normalizeNumberInput(e.target.value) || 0))} />
         </Field>
-        <Field label="Low Stock Threshold">
+        <Field label="Low Stock Threshold" required>
           <input type="number" className="input" value={form.low_stock_threshold} onInput={normalizeNumberInputOnInput} onChange={(e) => set("low_stock_threshold", Number(normalizeNumberInput(e.target.value) || 0))} />
         </Field>
-        <Field label="Status">
+        <Field label="Status" required>
           <select className="input" value={form.status} onChange={(e) => set("status", e.target.value as Item["status"])}>
             <option>Active</option>
             <option>Inactive</option>

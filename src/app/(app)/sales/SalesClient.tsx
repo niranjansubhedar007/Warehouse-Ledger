@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Item, BillLineInput } from "@/lib/types";
-import { usePagedList } from "@/hooks/usePagedList";
+import { useServerPagedList } from "@/hooks/useServerPagedList";
 import { useToast } from "@/components/ToastProvider";
 import { PageHeader, Table, Td, IconBtn, SearchBar, Pagination, Modal, Field } from "@/components/ui";
 import { money, normalizeNumberInput, normalizeNumberInputOnInput, todayISO } from "@/lib/format";
@@ -23,38 +23,30 @@ export function SalesClient() {
   const supabase = createClient();
   const showToast = useToast();
   const [items, setItems] = useState<Item[]>([]);
-  const [sales, setSales] = useState<SaleRow[]>([]);
-  const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const [itemsRes, salesRes] = await Promise.all([
-      supabase.from("items").select("*").order("name"),
-      supabase
-        .from("sales")
-        .select("id, bill_number, date, customer_name, customer_mobile, subtotal, grand_total, sale_items(quantity, shipping_weight)")
-        .order("created_at", { ascending: false }),
-    ]);
-    if (itemsRes.error) showToast(itemsRes.error.message);
-    else setItems(itemsRes.data as Item[]);
-    if (salesRes.error) showToast(salesRes.error.message);
-    else setSales(salesRes.data as unknown as SaleRow[]);
-    setLoading(false);
+  const loadItems = useCallback(async () => {
+    const { data, error } = await supabase.from("items").select("*").order("name");
+    if (error) showToast(error.message);
+    else setItems(data as Item[]);
   }, [supabase, showToast]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    loadItems();
+  }, [loadItems]);
 
-  const { query, setQuery, page, setPage, totalPages, paged, totalCount, pageSize } = usePagedList(
-    sales,
-    (s, q) =>
-      s.bill_number.toLowerCase().includes(q) ||
-      s.customer_name.toLowerCase().includes(q) ||
-      (s.customer_mobile || "").includes(q)
-  );
+  const loadPage = useCallback(async (page: number, query: string) => {
+    const from = (page - 1) * 10;
+    let request = supabase.from("sales").select("id, bill_number, date, customer_name, customer_mobile, subtotal, grand_total, sale_items(quantity, shipping_weight)", { count: "exact" }).order("created_at", { ascending: false }).range(from, from + 9);
+    if (query.trim()) request = request.or(`bill_number.ilike.%${query.trim()}%,customer_name.ilike.%${query.trim()}%,customer_mobile.ilike.%${query.trim()}%`);
+    const { data, error, count } = await request;
+    if (error) showToast(error.message, "error");
+    return { data: (data || []) as unknown as SaleRow[], total: count || 0 };
+  }, [supabase, showToast]);
+  const salesList = useServerPagedList(loadPage);
+  const { data: paged, loading, reload: load, query, setQuery, page, setPage, totalPages, totalCount, pageSize } = salesList;
+  const sales = paged;
 
   const createSale = async (bill: {
     customerName: string;
@@ -80,7 +72,7 @@ export function SalesClient() {
       showToast(error.message);
       return false;
     }
-    showToast("Bill confirmed and stock updated.", "success");
+    showToast("Bill created successfully and stock updated.", "success");
     setCreating(false);
     load();
     return true;
@@ -188,13 +180,13 @@ function BillForm({
   return (
     <Modal title="New Bill" onClose={onClose} wide>
       <div className="form-grid-3" style={{ marginBottom: 16 }}>
-        <Field label="Customer Name">
+        <Field label="Customer Name" required>
           <input className="input" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
         </Field>
         <Field label="Customer Mobile">
           <input className="input" maxLength={10} value={customerMobile} onChange={(e) => setCustomerMobile(e.target.value)} />
         </Field>
-        <Field label="Bill Date">
+        <Field label="Bill Date" required>
           <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} />
         </Field>
       </div>

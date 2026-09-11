@@ -1,18 +1,49 @@
 "use client";
-import { Suspense, useActionState, useState } from "react";
+import { Suspense, useActionState, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { login, type AuthActionState } from "./actions";
 import { Eye, EyeOff, Lock } from "@/components/icons";
-import { Field } from "@/components/ui";
+import { Field, Modal } from "@/components/ui";
+import { createClient } from "@/lib/supabase/client";
+import { useToast } from "@/components/ToastProvider";
 
 const initialState: AuthActionState = {};
 
 function LoginForm() {
   const [state, formAction, pending] = useActionState(login, initialState);
   const [showPassword, setShowPassword] = useState(false);
+  const [showRecovery, setShowRecovery] = useState(false);
+  const [recoveryUsername, setRecoveryUsername] = useState("");
+  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [recoveryPhone, setRecoveryPhone] = useState("");
+  const [recoveryPassword, setRecoveryPassword] = useState("");
+  const [recoveryPasswordVisible, setRecoveryPasswordVisible] = useState(false);
+  const [recoveryPending, setRecoveryPending] = useState(false);
   const [loginRole, setLoginRole] = useState<"staff" | "admin">("staff");
+  const showToast = useToast();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") || "/";
+
+  useEffect(() => {
+    if (!state?.error) return;
+    showToast(state.error, "error");
+  }, [state?.error, showToast]);
+  const recoveryStrength = recoveryPassword.length >= 8 && /[A-Za-z]/.test(recoveryPassword) && /\d/.test(recoveryPassword) ? "medium" : "low";
+  const resetPassword = async () => {
+    if (!recoveryUsername || !recoveryEmail || !recoveryPhone || recoveryStrength === "low") {
+      showToast("Enter all details and a password with at least 8 characters, letters, and numbers.", "warning");
+      return;
+    }
+    setRecoveryPending(true);
+    const supabase = createClient();
+    const { error } = await supabase.rpc("reset_profile_password", {
+      p_username: recoveryUsername.trim(), p_email: recoveryEmail.trim().toLowerCase(),
+      p_phone_number: recoveryPhone.trim(), p_new_password: recoveryPassword,
+    });
+    setRecoveryPending(false);
+    showToast(error ? error.message : "Password reset successfully. You can now sign in.", error ? "error" : "success");
+    if (!error) setRecoveryPassword("");
+  };
 
   return (
     <form action={formAction} className="login-card">
@@ -25,8 +56,6 @@ function LoginForm() {
         <h1>Welcome back</h1>
         <p className="login-sub">Sign in to manage your inventory and sales.</p>
       </div>
-
-      {state?.error && <div className="login-error">{state.error}</div>}
 
       <input type="hidden" name="next" value={next} />
       <input type="hidden" name="role" value={loginRole} />
@@ -76,6 +105,28 @@ function LoginForm() {
           {pending ? "Signing in…" : "Log In"}
         </button>
       </div>
+      <button type="button" className="login-forgot" onClick={() => setShowRecovery(true)}>
+        Forgot password?
+      </button>
+      {showRecovery && (
+        <Modal title="Reset Password" onClose={() => setShowRecovery(false)}>
+          <div className="login-recovery-form">
+            <p className="login-recovery-text">Verify your username, email, and phone number to choose a new password.</p>
+            <Field label="Username"><input className="input" value={recoveryUsername} onChange={(e) => setRecoveryUsername(e.target.value)} autoComplete="off" /></Field>
+            <Field label="Email"><input className="input" type="email" value={recoveryEmail} onChange={(e) => setRecoveryEmail(e.target.value)} autoComplete="off" /></Field>
+            <Field label="Phone Number"><input className="input" maxLength={10} type="tel" value={recoveryPhone} onChange={(e) => setRecoveryPhone(e.target.value)} autoComplete="off" /></Field>
+            <Field label="New Password">
+              <div className="password-input-wrap">
+                <input className="input password-input" type={recoveryPasswordVisible ? "text" : "password"} value={recoveryPassword} onChange={(e) => setRecoveryPassword(e.target.value)} autoComplete="off" />
+                <button type="button" className="password-toggle icon-btn" onClick={() => setRecoveryPasswordVisible((visible) => !visible)} aria-label={recoveryPasswordVisible ? "Hide password" : "Show password"}>
+                  {recoveryPasswordVisible ? <EyeOff size={17} /> : <Eye size={17} />}
+                </button>
+              </div>
+            </Field>
+            <button type="button" className="btn-primary full" disabled={recoveryPending || recoveryStrength === "low"} onClick={resetPassword}>{recoveryPending ? "Resetting..." : "Reset Password"}</button>
+          </div>
+        </Modal>
+      )}
     </form>
   );
 }
