@@ -19,7 +19,7 @@ function LoginForm() {
   const [recoveryPassword, setRecoveryPassword] = useState("");
   const [recoveryPasswordVisible, setRecoveryPasswordVisible] = useState(false);
   const [recoveryPending, setRecoveryPending] = useState(false);
-  const [loginRole, setLoginRole] = useState<"staff" | "admin">("staff");
+  const [loginRole, setLoginRole] = useState<"staff" | "admin">("admin");
   const showToast = useToast();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") || "/";
