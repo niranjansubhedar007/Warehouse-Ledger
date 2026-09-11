@@ -15,7 +15,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .eq("id", user.id)
     .single();
 
-  const role = (profile?.role as "admin" | "staff") || "staff";
+  if (!profile) redirect("/login");
+
+  const role = profile.role as "admin" | "staff";
   const username = profile?.username || user.username || "user";
   const isDarkMode = profile?.is_dark_mode ?? user.is_dark_mode;
 

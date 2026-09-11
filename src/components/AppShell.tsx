@@ -40,6 +40,7 @@ export function AppShell({
         <Sidebar
           role={role}
           lowCount={lowCount}
+          onLogout={() => setShowLogoutConfirm(true)}
           onClose={() => setSidebarOpen(false)}
           onNavigate={handleNavigate}
         />
@@ -52,7 +53,6 @@ export function AppShell({
             role={role}
             lowCount={lowCount}
             onToggleSidebar={() => setSidebarOpen((o) => !o)}
-            onLogout={() => setShowLogoutConfirm(true)}
           />
           <div className="content">{children}</div>
         </main>

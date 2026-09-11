@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Bell, LogOut, Menu, Moon, Sun } from "@/components/icons";
+import { Bell, Menu, Moon, Sun } from "@/components/icons";
 import { createClient } from "@/lib/supabase/client";
 
 export function TopBar({
@@ -10,7 +10,6 @@ export function TopBar({
   role,
   lowCount,
   onToggleSidebar,
-  onLogout,
 }: {
   profileId: string | number;
   isDarkMode: boolean;
@@ -18,7 +17,6 @@ export function TopBar({
   role: string;
   lowCount: number;
   onToggleSidebar: () => void;
-  onLogout: () => void;
 }) {
   const [darkMode, setDarkMode] = useState(initialDarkMode);
 
@@ -58,9 +56,6 @@ export function TopBar({
           title={darkMode ? "Switch to light theme" : "Switch to dark theme"}
         >
           {darkMode ? <Sun size={16} /> : <Moon size={16} />}
-        </button>
-        <button onClick={onLogout} className="topbar-logout">
-          <LogOut size={14} /> Logout
         </button>
       </div>
     </div>

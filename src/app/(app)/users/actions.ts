@@ -21,6 +21,8 @@ export async function createUser(
     return { error: "Username must be 3-32 characters using letters, numbers, dots, underscores, or hyphens." };
   }
   if (password.length < 6) return { error: "Password must be at least 6 characters." };
+  const isMediumPassword = password.length >= 8 && /[A-Za-z]/.test(password) && /\d/.test(password);
+  if (!isMediumPassword) return { error: "Password strength is Low. Use at least 8 characters with letters and numbers." };
   if (role !== "admin" && role !== "staff") return { error: "Choose a valid role." };
 
   const supabase = await createClient();

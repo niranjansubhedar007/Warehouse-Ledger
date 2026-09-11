@@ -10,6 +10,7 @@ import {
   Boxes,
   FileBarChart,
   UserPlus,
+  LogOut,
   X,
 } from "@/components/icons";
 
@@ -33,11 +34,13 @@ export const NAV: NavItem[] = [
 export function Sidebar({
   role,
   lowCount,
+  onLogout,
   onClose,
   onNavigate,
 }: {
   role: "admin" | "staff";
   lowCount: number;
+  onLogout: () => void;
   onClose: () => void;
   onNavigate: () => void;
 }) {
@@ -74,6 +77,12 @@ export function Sidebar({
           );
         })}
       </nav>
+      <div className="sidebar-footer">
+        <button type="button" onClick={onLogout} className="sidebar-item sidebar-logout">
+          <LogOut size={16} />
+          <span className="label">Logout</span>
+        </button>
+      </div>
     </aside>
   );
 }
