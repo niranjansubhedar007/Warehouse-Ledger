@@ -34,7 +34,47 @@ export interface Purchase {
   created_at: string;
 }
 
+export interface Quotation {
+  id: string;
+  quotation_number: string;
+  date: string;
+  customer_name: string;
+  customer_mobile: string | null;
+  subtotal: number;
+  discount: number;
+  tax: number;
+  shipping_charge: number;
+  grand_total: number;
+  status: "pending" | "done" | "rejected";
+  created_at: string;
+}
+
+export interface QuotationItem {
+  id: string;
+  quotation_id: string;
+  item_id: string;
+  quantity: number;
+  selling_price: number;
+  amount: number;
+}
+
+export interface QuotationWithItems extends Quotation {
+  quotation_items: QuotationItem[];
+}
+
+export interface QuotationRow extends Quotation {
+  quotation_items: {
+    item_id: string;
+    quantity: number;
+    shipping_weight: number;
+    selling_price: number;
+    item_name: string;
+  }[];
+  sales?: { id: string; bill_number: string }[];
+}
+
 export interface Sale {
+
   id: string;
   bill_number: string;
   date: string;

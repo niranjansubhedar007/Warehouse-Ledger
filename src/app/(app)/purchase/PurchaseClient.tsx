@@ -5,7 +5,7 @@ import type { Item, Purchase } from "@/lib/types";
 import { useServerPagedList } from "@/hooks/useServerPagedList";
 import { useToast } from "@/components/ToastProvider";
 import { PageHeader, Table, Td, IconBtn, SearchBar, Pagination, Modal, Field } from "@/components/ui";
-import { money, normalizeNumberInput, normalizeNumberInputOnInput, todayISO } from "@/lib/format";
+import { formatDate, money, normalizeNumberInput, normalizeNumberInputOnInput, todayISO } from "@/lib/format";
 import { Plus, Trash2 } from "@/components/icons";
 
 export function PurchaseClient() {
@@ -95,7 +95,7 @@ export function PurchaseClient() {
                 <tr key={p.id}>
                   <Td>{(page - 1) * pageSize + idx + 1}</Td>
                   <Td className="mono">{p.invoice_number}</Td>
-                  <Td>{p.date}</Td>
+                  <Td>{formatDate(p.date)}</Td>
                   <Td>{p.supplier}</Td>
                   <Td>{itemName(p.item_id)}</Td>
                   <Td className="num">{p.quantity}</Td>

@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Item } from "@/lib/types";
 import { PageHeader, StatCard, Table, Td } from "@/components/ui";
 import { SalesBarChart } from "@/components/SalesBarChart";
-import { money, todayISO } from "@/lib/format";
+import { formatDate, money, todayISO } from "@/lib/format";
 
 interface SaleRow {
   date: string;
@@ -66,7 +66,7 @@ export function DashboardClient() {
     for (let i = rangeDays - 1; i >= 0; i--) {
       const d = daysAgoISO(i);
       const total = sales.filter((s) => s.date === d).reduce((sum, s) => sum + Number(s.grand_total), 0);
-      days.push({ date: d.slice(5), total });
+      days.push({ date: formatDate(d).slice(0, 5), total });
     }
     return days;
   }, [sales, rangeDays]);
@@ -75,7 +75,7 @@ export function DashboardClient() {
     <div>
       <PageHeader title="Dashboard" subtitle="Today's activity across purchase, sales and stock." />
       <div className="stat-grid">
-        <StatCard label="Today's Sales" value={money(todaysSales)} color="var(--green)" />
+        <StatCard label="Today's Sales" value={money(Math.abs(todaysSales))} color="var(--green)" />
         <StatCard label="Today's Purchase" value={money(todaysPurchase)} color="var(--blue)" />
         <StatCard label="Today's Profit" value={money(todaysProfit)} color="var(--orange)" />
         <StatCard label="Low Stock Items" value={loading ? "…" : lowStockItems.length} color="var(--accent)" />

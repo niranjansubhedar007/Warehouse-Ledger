@@ -5,7 +5,7 @@ import type { Item } from "@/lib/types";
 import { usePagedList } from "@/hooks/usePagedList";
 import { useToast } from "@/components/ToastProvider";
 import { PageHeader, StatCard, Table, Td, SearchBar, Pagination } from "@/components/ui";
-import { money } from "@/lib/format";
+import { formatDate, money } from "@/lib/format";
 
 interface SaleLineRow {
   bill_number: string;
@@ -17,6 +17,8 @@ interface SaleLineRow {
   purchase_price: number;
   selling_price: number;
   profit: number;
+  tax: number;
+  shipping_charge: number;
 }
 
 interface PurchaseRow {
@@ -38,10 +40,9 @@ interface ProfitRow {
   profit: number;
 }
 
-export function ReportsClient() {
+export function ReportsClient({ report }: { report: "sales" | "purchase" | "profit" }) {
   const supabase = createClient();
   const showToast = useToast();
-  const [tab, setTab] = useState<"sales" | "purchase" | "profit">("sales");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [loading, setLoading] = useState(true);
@@ -59,7 +60,7 @@ export function ReportsClient() {
     const items = (itemsRes.data || []) as Item[];
     const itemName = (id: string) => items.find((i) => i.id === id)?.name || "—";
 
-    let salesQuery = supabase.from("sales").select("id, bill_number, date, customer_name, grand_total").order("date", { ascending: false }).limit(2000);
+    let salesQuery = supabase.from("sales").select("id, bill_number, date, customer_name, grand_total, tax, shipping_charge").order("date", { ascending: false }).limit(2000);
     if (startDate) salesQuery = salesQuery.gte("date", startDate);
     if (endDate) salesQuery = salesQuery.lte("date", endDate);
     const salesRes = await salesQuery;
@@ -98,6 +99,8 @@ export function ReportsClient() {
         purchase_price: Number(l.purchase_price),
         selling_price: Number(l.selling_price),
         profit: Number(l.profit),
+        tax: Number(sale?.tax || 0),
+        shipping_charge: Number(sale?.shipping_charge || 0),
       };
     });
 
@@ -136,77 +139,57 @@ export function ReportsClient() {
     load();
   }, [load]);
 
-  const hasDateFilter = startDate || endDate;
-
   return (
     <div>
-      <PageHeader title="Reports" subtitle="Sales, purchase and profit history." />
+      <PageHeader
+        title={report === "sales" ? "Sales Report" : report === "purchase" ? "Purchase Report" : "Profit Report"}
+        subtitle={report === "sales" ? "Detailed sales history." : report === "purchase" ? "Detailed purchase history." : "Profit analysis by item."}
+      />
 
-      <div className="date-filter-row">
-        <div className="date-field">
-          <div className="field-label">From</div>
-          <input type="date" className="input" value={startDate} max={endDate || undefined} onChange={(e) => setStartDate(e.target.value)} />
-        </div>
-        <div className="date-field">
-          <div className="field-label">To</div>
-          <input type="date" className="input" value={endDate} min={startDate || undefined} onChange={(e) => setEndDate(e.target.value)} />
-        </div>
-        {hasDateFilter && (
-          <button type="button" className="btn-secondary" onClick={() => { setStartDate(""); setEndDate(""); }}>
-            Clear dates
-          </button>
-        )}
-      </div>
-
-      <div className="tab-row bordered">
-        {(
-          [
-            ["sales", "Sales"],
-            ["purchase", "Purchase"],
-            ["profit", "Profit"],
-          ] as const
-        ).map(([k, l]) => (
-          <button key={k} onClick={() => setTab(k)} className={`tab ${tab === k ? "active" : ""}`}>
-            {l}
-          </button>
-        ))}
-      </div>
-
-      {tab === "sales" && <SalesReportTab rows={salesRows} loading={loading} />}
-      {tab === "purchase" && <PurchaseReportTab rows={purchaseRows} loading={loading} />}
-      {tab === "profit" && (
-        <ProfitReportTab rows={profitRows} loading={loading} totalRevenue={totalRevenue} totalProfit={totalProfit} />
+      {report === "sales" && <SalesReportTab rows={salesRows} loading={loading} startDate={startDate} endDate={endDate} setStartDate={setStartDate} setEndDate={setEndDate} />}
+      {report === "purchase" && <PurchaseReportTab rows={purchaseRows} loading={loading} startDate={startDate} endDate={endDate} setStartDate={setStartDate} setEndDate={setEndDate} />}
+      {report === "profit" && (
+        <ProfitReportTab rows={profitRows} loading={loading} totalRevenue={totalRevenue} totalProfit={totalProfit} startDate={startDate} endDate={endDate} setStartDate={setStartDate} setEndDate={setEndDate} />
       )}
     </div>
   );
 }
 
-function SalesReportTab({ rows, loading }: { rows: SaleLineRow[]; loading: boolean }) {
+type DateFilterProps = { startDate: string; endDate: string; setStartDate: (value: string) => void; setEndDate: (value: string) => void };
+function ReportToolbar({ query, setQuery, placeholder, startDate, endDate, setStartDate, setEndDate }: DateFilterProps & { query: string; setQuery: (value: string) => void; placeholder: string }) {
+  return <div className="list-toolbar report-toolbar">
+    <SearchBar value={query} onChange={setQuery} placeholder={placeholder} />
+    <input type="date" className="input" value={startDate} max={endDate || undefined} onChange={(e) => setStartDate(e.target.value)} aria-label="Start date" />
+    <input type="date" className="input" value={endDate} min={startDate || undefined} onChange={(e) => setEndDate(e.target.value)} aria-label="End date" />
+  </div>;
+}
+
+function SalesReportTab({ rows, loading, ...dates }: { rows: SaleLineRow[]; loading: boolean } & DateFilterProps) {
   const { query, setQuery, page, setPage, totalPages, paged, totalCount, pageSize } = usePagedList(rows, (r, q) =>
     r.bill_number.toLowerCase().includes(q) || r.customer_name.toLowerCase().includes(q) || r.item_name.toLowerCase().includes(q)
   );
   return (
     <div>
-      <div className="list-toolbar">
-        <SearchBar value={query} onChange={setQuery} placeholder="Search bill no, customer or item" />
-      </div>
+      <ReportToolbar query={query} setQuery={setQuery} placeholder="Search bill no, customer or item" {...dates} />
       <div className="panel">
         <div className="table-scroll">
-          <Table headers={["Sr", "Bill No", "Date", "Customer", "Item", "Qty", "Weight", "Purchase ₹", "Sell ₹", "Profit ₹"]}>
+          <Table headers={["Sr", "Bill No", "Date", "Customer", "Item", "Qty", "Weight", "Tax", "Shipping", "Purchase ₹", "Sell ₹", "Profit ₹"]}>
             {loading ? (
-              <tr><Td colSpan={10} className="text-muted">Loading…</Td></tr>
+              <tr><Td colSpan={12} className="text-muted">Loading…</Td></tr>
             ) : paged.length === 0 ? (
-              <tr><Td colSpan={10} className="text-muted">No sales lines match your search.</Td></tr>
+              <tr><Td colSpan={12} className="text-muted">No sales lines match your search.</Td></tr>
             ) : (
               paged.map((row, idx) => (
                 <tr key={idx}>
                   <Td>{(page - 1) * pageSize + idx + 1}</Td>
                   <Td className="mono">{row.bill_number}</Td>
-                  <Td>{row.date}</Td>
+                  <Td>{formatDate(row.date)}</Td>
                   <Td>{row.customer_name}</Td>
                   <Td>{row.item_name}</Td>
                   <Td className="num">{row.quantity}</Td>
                   <Td className="num">{row.shipping_weight.toFixed(2)} kg</Td>
+                  <Td className="num">{money(row.tax)}</Td>
+                  <Td className="num">{money(row.shipping_charge)}</Td>
                   <Td className="num">{money(row.purchase_price)}</Td>
                   <Td className="num">{money(row.selling_price)}</Td>
                   <Td className="text-success num">{money(row.profit)}</Td>
@@ -221,15 +204,13 @@ function SalesReportTab({ rows, loading }: { rows: SaleLineRow[]; loading: boole
   );
 }
 
-function PurchaseReportTab({ rows, loading }: { rows: PurchaseRow[]; loading: boolean }) {
+function PurchaseReportTab({ rows, loading, ...dates }: { rows: PurchaseRow[]; loading: boolean } & DateFilterProps) {
   const { query, setQuery, page, setPage, totalPages, paged, totalCount, pageSize } = usePagedList(rows, (r, q) =>
     r.invoice_number.toLowerCase().includes(q) || r.supplier.toLowerCase().includes(q) || r.item_name.toLowerCase().includes(q)
   );
   return (
     <div>
-      <div className="list-toolbar">
-        <SearchBar value={query} onChange={setQuery} placeholder="Search invoice, supplier or item" />
-      </div>
+      <ReportToolbar query={query} setQuery={setQuery} placeholder="Search invoice, supplier or item" {...dates} />
       <div className="panel">
         <div className="table-scroll">
           <Table headers={["Sr", "Invoice No", "Date", "Supplier", "Item", "Qty", "Price ₹", "Total ₹", "Weight"]}>
@@ -242,7 +223,7 @@ function PurchaseReportTab({ rows, loading }: { rows: PurchaseRow[]; loading: bo
                 <tr key={p.id}>
                   <Td>{(page - 1) * pageSize + idx + 1}</Td>
                   <Td className="mono">{p.invoice_number}</Td>
-                  <Td>{p.date}</Td>
+                  <Td>{formatDate(p.date)}</Td>
                   <Td>{p.supplier}</Td>
                   <Td>{p.item_name}</Td>
                   <Td className="num">{p.quantity}</Td>
@@ -265,24 +246,23 @@ function ProfitReportTab({
   loading,
   totalRevenue,
   totalProfit,
+  ...dates
 }: {
   rows: ProfitRow[];
   loading: boolean;
   totalRevenue: number;
   totalProfit: number;
-}) {
+} & DateFilterProps) {
   const { query, setQuery, page, setPage, totalPages, paged, totalCount, pageSize } = usePagedList(rows, (r, q) =>
     r.item_name.toLowerCase().includes(q)
   );
   return (
     <div>
       <div className="stat-grid-2">
-        <StatCard label="Total Revenue" value={money(totalRevenue)} color="var(--blue)" />
+        <StatCard label="Total Revenue" value={money(Math.abs(totalRevenue))} color="var(--blue)" />
         <StatCard label="Total Profit" value={money(totalProfit)} color="var(--green)" />
       </div>
-      <div className="list-toolbar">
-        <SearchBar value={query} onChange={setQuery} placeholder="Search item name" />
-      </div>
+      <ReportToolbar query={query} setQuery={setQuery} placeholder="Search item name" {...dates} />
       <div className="panel">
         <div className="table-scroll">
           <Table headers={["Sr", "Item", "Units Sold", "Total Profit ₹"]}>

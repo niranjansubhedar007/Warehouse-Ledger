@@ -75,6 +75,24 @@ export const Moon = (p: IconProps) => (
   <Icon {...p}><path d="M20.5 15.2A8.5 8.5 0 0 1 8.8 3.5 8.5 8.5 0 1 0 20.5 15.2z" /></Icon>
 );
 export const Menu = (p: IconProps) => <Icon {...p}><path d="M4 6.5h16M4 12h16M4 17.5h16" /></Icon>;
+export const ChevronUp = (p: IconProps) => <Icon {...p}><path d="m6 14 6-6 6 6" /></Icon>;
+export const ChevronDown = (p: IconProps) => <Icon {...p}><path d="m6 10 6 6 6-6" /></Icon>;
 export const UserPlus = (p: IconProps) => (
   <Icon {...p}><path d="M15 20.5v-1.2a4.8 4.8 0 0 0-4.8-4.8H6.8A4.8 4.8 0 0 0 2 19.3v1.2" /><circle cx="8.5" cy="7.2" r="3.7" /><path d="M19 8v6M16 11h6" /></Icon>
+);
+
+export const FileText = (p: IconProps) => (
+  <Icon {...p}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><line x1="10" y1="13" x2="8" y2="13" /></Icon>
+);
+export const CheckCircle = (p: IconProps) => (
+  <Icon {...p}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14 9 11" /></Icon>
+);
+export const Clock = (p: IconProps) => (
+  <Icon {...p}><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></Icon>
+);
+export const Download = (p: IconProps) => (
+  <Icon {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></Icon>
+);
+export const MessageCircle = (p: IconProps) => (
+  <Icon {...p}><path d="M21 11.5a8.38 8.38 0 0 1-5.25 2.5L12 15l-3.75-2.5A8.38 8.38 0 0 1 3 11.5c0-4.5 3.5-8.5 8-8.5s8 4 8 8.5z" /><path d="M12 15v6m-3-3l3 3 3-3" /></Icon>
 );
