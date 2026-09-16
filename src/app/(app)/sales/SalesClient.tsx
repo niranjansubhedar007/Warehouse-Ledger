@@ -61,14 +61,14 @@ export function SalesClient() {
     if (data) {
       const flatItems = data.flatMap(s => s.sale_items);
       const itemIds = flatItems.map(i => i.item_id);
-      const { data: itemDetails } = await supabase.from("items").select("id, shipping_weight").in("id", itemIds);
-      const weightMap = new Map(itemDetails?.map(i => [i.id, i.shipping_weight]) || []);
+      const { data: itemDetails } = await supabase.from("items").select("id, name, shipping_weight").in("id", itemIds);
+      const itemMap = new Map(itemDetails?.map(i => [i.id, i]) || []);
       const enrichedData = data.map(s => ({
         ...s,
         sale_items: s.sale_items.map(i => ({
           ...i,
-          shipping_weight: weightMap.get(i.item_id) || 0,
-          item_name: i.items?.[0]?.name || `Item ${i.item_id}`
+          shipping_weight: itemMap.get(i.item_id)?.shipping_weight || 0,
+          item_name: itemMap.get(i.item_id)?.name || i.items?.[0]?.name || `Item ${i.item_id}`
         }))
       }));
       return { data: enrichedData as unknown as SaleRow[], total: count || 0 };
@@ -91,14 +91,14 @@ export function SalesClient() {
     if (data) {
       const flatItems = data.flatMap(q => q.quotation_items);
       const itemIds = flatItems.map(i => i.item_id);
-      const { data: itemDetails } = await supabase.from("items").select("id, shipping_weight").in("id", itemIds);
-      const weightMap = new Map(itemDetails?.map(i => [i.id, i.shipping_weight]) || []);
+      const { data: itemDetails } = await supabase.from("items").select("id, name, shipping_weight").in("id", itemIds);
+      const itemMap = new Map(itemDetails?.map(i => [i.id, i]) || []);
       const enrichedData = data.map(q => ({
         ...q,
         quotation_items: q.quotation_items.map(i => ({
           ...i,
-          shipping_weight: weightMap.get(i.item_id) || 0,
-          item_name: i.items?.[0]?.name || `Item ${i.item_id}`
+          shipping_weight: itemMap.get(i.item_id)?.shipping_weight || 0,
+          item_name: itemMap.get(i.item_id)?.name || i.items?.[0]?.name || `Item ${i.item_id}`
         }))
       }));
       return { data: enrichedData as unknown as QuotationRow[], total: count || 0 };
