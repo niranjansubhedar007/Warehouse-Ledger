@@ -54,17 +54,11 @@ export function BillForm({ items, onSave, onClose, saving, editingQuotation, ini
   const [shippingCharge, setShippingCharge] = useState(editingQuotation?.shipping_charge || 0);
 
   const addLine = () => {
-    const first = activeItems[0];
-    if (!first) return;
-    setLines((currentLines) => {
-      const existing = currentLines.find((line) => line.item_id === first.id);
-      if (existing) {
-        return currentLines.map((line) =>
-          line.item_id === first.id ? { ...line, quantity: line.quantity + 1 } : line
-        );
-      }
-      return [...currentLines, { item_id: first.id, quantity: 1, selling_price: first.selling_price }];
-    });
+    if (activeItems.length === 0) return;
+    setLines((currentLines) => [
+      ...currentLines,
+      { item_id: "", quantity: 1, selling_price: 0 },
+    ]);
   };
   const updateLine = (idx: number, patch: Partial<BillLineInput>) =>
     setLines((currentLines) => {
@@ -99,12 +93,12 @@ export function BillForm({ items, onSave, onClose, saving, editingQuotation, ini
   }, {} as Record<string, number>);
 
   const stockErrors = lines.map(ln => {
-    const item = items.find(i => i.id === ln.item_id);
+    const item = items.find(i => String(i.id) === String(ln.item_id));
     return item ? requestedStock[ln.item_id] > item.current_stock : false;
   });
   const hasStockError = stockErrors.some(err => err);
 
-  const canSave = Boolean(customerName.trim()) && Boolean(customerMobile.trim()) && lines.length > 0 && lines.every((l) => l.quantity > 0) && !hasStockError;
+  const canSave = Boolean(customerName.trim()) && Boolean(customerMobile.trim()) && lines.length > 0 && lines.every((l) => Boolean(l.item_id) && l.quantity > 0) && !hasStockError;
 
   return (
     <Modal title={editingQuotation ? "Edit Quotation" : "New Quotation"} onClose={onClose} wide>
@@ -145,7 +139,7 @@ export function BillForm({ items, onSave, onClose, saving, editingQuotation, ini
               </thead>
               <tbody style={{ position: 'relative' }}>
                 {lines.map((ln, idx) => {
-                  const item = items.find(i => i.id === ln.item_id);
+                  const item = items.find(i => String(i.id) === String(ln.item_id));
                   const isOverstock = stockErrors[idx];
                   return (
                     <tr key={idx} style={{ borderBottom: "1px solid var(--border)" }}>
@@ -154,8 +148,17 @@ export function BillForm({ items, onSave, onClose, saving, editingQuotation, ini
                         <select
                           className="input"
                           value={ln.item_id}
-                          onChange={(e) => updateLine(idx, { item_id: e.target.value })}
+                          onChange={(e) => {
+                            const selectedItem = activeItems.find(
+                              (activeItem) => String(activeItem.id) === e.target.value
+                            );
+                            updateLine(idx, {
+                              item_id: e.target.value,
+                              selling_price: selectedItem?.selling_price ?? ln.selling_price,
+                            });
+                          }}
                         >
+                          <option value="" disabled>Select an item</option>
                           {activeItems.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
                         </select>
                       </td>
