@@ -68,7 +68,7 @@ export function SalesClient() {
         sale_items: s.sale_items.map(i => ({
           ...i,
           shipping_weight: itemMap.get(i.item_id)?.shipping_weight || 0,
-          item_name: itemMap.get(i.item_id)?.name || i.items?.[0]?.name || `Item ${i.item_id}`
+          item_name: itemMap.get(i.item_id)?.name || `Item ${i.item_id}`
         }))
       }));
       return { data: enrichedData as unknown as SaleRow[], total: count || 0 };
@@ -98,7 +98,7 @@ export function SalesClient() {
         quotation_items: q.quotation_items.map(i => ({
           ...i,
           shipping_weight: itemMap.get(i.item_id)?.shipping_weight || 0,
-          item_name: itemMap.get(i.item_id)?.name || i.items?.[0]?.name || `Item ${i.item_id}`
+          item_name: itemMap.get(i.item_id)?.name || `Item ${i.item_id}`
         }))
       }));
       return { data: enrichedData as unknown as QuotationRow[], total: count || 0 };

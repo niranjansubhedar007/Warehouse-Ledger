@@ -7,6 +7,7 @@ import { useToast } from "@/components/ToastProvider";
 import { PageHeader, Table, Td, IconBtn, SearchBar, Pagination, Modal, Field } from "@/components/ui";
 import { formatDate, money, normalizeNumberInput, normalizeNumberInputOnInput, todayISO } from "@/lib/format";
 import { Plus, Trash2 } from "@/components/icons";
+import { ItemCombobox } from "@/components/ItemCombobox";
 
 export function PurchaseClient() {
   const supabase = createClient();
@@ -32,13 +33,26 @@ export function PurchaseClient() {
     if (query.trim()) request = request.or(`invoice_number.ilike.%${query.trim()}%,supplier.ilike.%${query.trim()}%`);
     const purchasesRes = await request;
     if (purchasesRes.error) showToast(purchasesRes.error.message, "error");
-    return { data: (purchasesRes.data || []) as Purchase[], total: purchasesRes.count || 0 };
+    const purchases = (purchasesRes.data || []) as (Purchase & { items?: { name?: string } | { name?: string }[] })[];
+    const itemIds = purchases.map((purchase) => purchase.item_id).filter(Boolean);
+    const { data: itemDetails } = itemIds.length
+      ? await supabase.from("items").select("id, name").in("id", itemIds)
+      : { data: [] as { id: string | number; name: string }[] };
+    const itemMap = new Map((itemDetails || []).map((item) => [String(item.id), item.name]));
+    const enrichedPurchases = purchases.map((purchase) => ({
+      ...purchase,
+      item_name: itemMap.get(String(purchase.item_id)) || "—",
+    }));
+    return { data: enrichedPurchases as Purchase[], total: purchasesRes.count || 0 };
   }, [supabase, showToast]);
   const purchasesList = useServerPagedList(loadPage);
   const { data: paged, loading, reload: load, query, setQuery, page, setPage, totalPages, totalCount, pageSize } = purchasesList;
   const purchases = paged;
 
-  const itemName = (id: string) => items.find((i) => i.id === id)?.name || "—";
+  const itemName = (purchase: Purchase & { item_name?: string; items?: { name?: string }[] | { name?: string } }) => {
+    const relatedItem = Array.isArray(purchase.items) ? purchase.items[0] : purchase.items;
+    return purchase.item_name || relatedItem?.name || items.find((i) => String(i.id) === String(purchase.item_id))?.name || "—";
+  };
 
   const addPurchase = async (form: { supplier: string; item_id: string; quantity: number; purchase_price: number; date: string }) => {
     setSaving(true);
@@ -97,7 +111,7 @@ export function PurchaseClient() {
                   <Td className="mono">{p.invoice_number}</Td>
                   <Td>{formatDate(p.date)}</Td>
                   <Td>{p.supplier}</Td>
-                  <Td>{itemName(p.item_id)}</Td>
+                  <Td>{itemName(p)}</Td>
                   <Td className="num">{p.quantity}</Td>
                   <Td className="num">{money(p.purchase_price)}</Td>
                   <Td className="num">{money(p.total_amount)}</Td>
@@ -149,7 +163,6 @@ function PurchaseForm({
   const [itemId, setItemId] = useState(items[0]?.id || "");
   const [quantity, setQuantity] = useState("");
   const [purchasePrice, setPurchasePrice] = useState("");
-
   const canSave = supplier && itemId && Number(quantity) > 0 && Number(purchasePrice) >= 0;
 
   return (
@@ -162,13 +175,7 @@ function PurchaseForm({
           <input className="input" value={supplier} onChange={(e) => setSupplier(e.target.value)} />
         </Field>
         <Field label="Item" required>
-          <select className="input" value={itemId} onChange={(e) => setItemId(e.target.value)}>
-            {items.map((i) => (
-              <option key={i.id} value={i.id}>
-                {i.name}
-              </option>
-            ))}
-          </select>
+          <ItemCombobox items={items} value={itemId} onChange={setItemId} />
         </Field>
         <Field label="Quantity" required>
           <input type="number" className="input" value={quantity} onInput={normalizeNumberInputOnInput} onChange={(e) => setQuantity(normalizeNumberInput(e.target.value))} />

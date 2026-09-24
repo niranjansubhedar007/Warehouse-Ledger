@@ -30,6 +30,7 @@ export const NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutGrid, adminOnly: true },
   { href: "/items", label: "Item Master", icon: Package },
   { href: "/purchase", label: "Purchase", icon: ShoppingCart },
+  { href: "/transport", label: "Transport / Courier", icon: Package },
   { href: "/sales", label: "Quotation / Billing", icon: Receipt },
   { href: "/stock", label: "Stock", icon: Boxes },
   {

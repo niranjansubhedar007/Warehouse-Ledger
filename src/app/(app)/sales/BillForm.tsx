@@ -1,6 +1,7 @@
 "use client";
 import { useState, useMemo } from "react";
 import { Modal, Field } from "@/components/ui";
+import { ItemCombobox } from "@/components/ItemCombobox";
 import { normalizeNumberInput, normalizeNumberInputOnInput, money } from "@/lib/format";
 import type { Item, BillLineInput, QuotationRow } from "@/lib/types";
 import { Plus, Trash2 } from "@/components/icons";
@@ -128,13 +129,13 @@ export function BillForm({ items, onSave, onClose, saving, editingQuotation, ini
             <table className="data-table bill-table">
               <thead style={{ position: "sticky", top: 0, zIndex: 1, backgroundColor: "var(--bg-main)", boxShadow: "0 1px 0 var(--border)" }}>
                 <tr>
-                  <th style={{ width: 50, textAlign: 'center' }}>Sr</th>
-                  <th>Item</th>
-                  <th style={{ width: 100 }}>Stock</th>
-                  <th style={{ width: 100 }}>Qty</th>
-                  <th style={{ width: 150 }}>Price</th>
-                  <th style={{ width: 150, textAlign: 'right' }}>Amount</th>
-                  <th style={{ width: 40 }}></th>
+                  <th className="col-sr" style={{ textAlign: 'center' }}>Sr</th>
+                  <th className="col-item">Item</th>
+                  <th className="col-stock">Stock</th>
+                  <th className="col-qty">Qty</th>
+                  <th className="col-price">Price</th>
+                  <th className="col-amt" style={{ textAlign: 'right' }}>Amount</th>
+                  <th className="col-del"></th>
                 </tr>
               </thead>
               <tbody style={{ position: 'relative' }}>
@@ -145,22 +146,19 @@ export function BillForm({ items, onSave, onClose, saving, editingQuotation, ini
                     <tr key={idx} style={{ borderBottom: "1px solid var(--border)" }}>
                       <td style={{ textAlign: 'center', color: 'var(--text-dim)' }}>{idx + 1}</td>
                       <td>
-                        <select
-                          className="input"
+                        <ItemCombobox
+                          items={activeItems}
                           value={ln.item_id}
-                          onChange={(e) => {
+                          onChange={(value) => {
                             const selectedItem = activeItems.find(
-                              (activeItem) => String(activeItem.id) === e.target.value
+                              (activeItem) => String(activeItem.id) === value
                             );
                             updateLine(idx, {
-                              item_id: e.target.value,
+                              item_id: value,
                               selling_price: selectedItem?.selling_price ?? ln.selling_price,
                             });
                           }}
-                        >
-                          <option value="" disabled>Select an item</option>
-                          {activeItems.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
-                        </select>
+                        />
                       </td>
                       <td className="num" style={{ textAlign: 'center', color: isOverstock ? 'red' : 'inherit', fontWeight: isOverstock ? 600 : 400 }}>
                         {item?.current_stock || 0}
@@ -171,11 +169,11 @@ export function BillForm({ items, onSave, onClose, saving, editingQuotation, ini
                             type="number"
                             min="1"
                             className={`input ${isOverstock ? "text-danger" : ""}`}
-                            value={ln.quantity}
+                            value={ln.quantity || ""}
                             onInput={normalizeNumberInputOnInput}
                             onChange={(e) => {
                               const val = Number(normalizeNumberInput(e.target.value) || 0);
-                              updateLine(idx, { quantity: val < 1 ? 1 : val });
+                              updateLine(idx, { quantity: val });
                             }}
                           />
                           {isOverstock && (

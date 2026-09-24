@@ -195,7 +195,7 @@ button,input,select,textarea{font:inherit;}
 .pagination-controls button{padding:5px 12px;font-size:12px;}
 .pagination-controls .page-indicator{font-size:12px;color:var(--text-dim);font-variant-numeric:tabular-nums;white-space:nowrap;}
 
-.modal-overlay{position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;}
+.modal-overlay{position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;overflow-y:auto;}
 .modal{background:var(--surface);border-radius:14px;box-shadow:var(--shadow);width:100%;max-width:440px;max-height:90vh;overflow-y:auto;padding:24px;border:1px solid var(--border);}
 .modal.wide{max-width:740px;}
 .modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;}
@@ -263,6 +263,15 @@ button,input,select,textarea{font:inherit;}
 .input:focus{border-color:var(--blue);}
 .login-card .input:focus{box-shadow:0 0 0 3px rgba(79,140,255,.12);}
 .input:disabled{background:var(--surface-sunken);color:var(--text-faint);}
+.item-combobox{position:relative;width:100%;}
+.item-combobox-trigger{display:flex;align-items:center;justify-content:space-between;text-align:left;cursor:pointer;}
+.item-combobox-menu{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:20;background:var(--surface);border:1px solid var(--border);border-radius:9px;box-shadow:var(--shadow);overflow:hidden;}
+.item-combobox-search{display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid var(--border);color:var(--text-faint);}
+.item-combobox-search input{width:100%;border:0;outline:0;background:transparent;color:var(--text);font:inherit;font-size:13px;}
+.item-combobox-options{max-height:240px;overflow-y:auto;padding:4px;}
+.item-combobox-option{display:block;width:100%;padding:9px 10px;border:0;border-radius:6px;background:transparent;color:var(--text);text-align:left;cursor:pointer;font:inherit;font-size:13px;}
+.item-combobox-option:hover,.item-combobox-option.selected{background:var(--surface-sunken);}
+.item-combobox-empty{padding:12px 10px;color:var(--text-faint);font-size:12px;}
 .password-input-wrap{position:relative;}
 .password-input{padding-right:40px;}
 .password-toggle{position:absolute;right:4px;top:50%;transform:translateY(-50%);}
@@ -277,15 +286,20 @@ button:focus-visible,input:focus-visible,select:focus-visible,.sidebar-item:focu
 .chart-wrap{width:100%;}
 .chart-empty{font-size:13px;color:var(--text-faint);padding:32px 0;text-align:center;}
 
-.bill-table{table-layout:fixed;}
+.bill-table{table-layout:fixed;min-width:760px;}
 .bill-table .col-sr{width:34px;}
-.bill-table .col-item{width:auto;}
+.bill-table .col-item{width:220px;}
+.bill-table .col-stock{width:72px;}
 .bill-table .col-qty{width:84px;}
-.bill-table .col-price{width:100px;}
+.bill-table .col-price{width:120px;}
 .bill-table .col-wt{width:88px;}
 .bill-table .col-amt{width:104px;}
 .bill-table .col-del{width:34px;}
 .bill-table td input.input,.bill-table td select.input{width:100%;min-width:0;padding:7px 8px;}
+.bill-table td:nth-child(2){width:220px;min-width:220px;vertical-align:top;}
+.bill-table td:nth-child(2) .item-combobox-trigger{min-height:42px;white-space:normal;line-height:1.25;}
+.bill-table td:nth-child(2) .item-combobox-trigger span:first-child{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;white-space:normal;overflow-wrap:anywhere;}
+.bill-table td:nth-child(5) input.input{min-width:100px;pointer-events:auto;position:relative;z-index:1;}
 
 .form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .form-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
@@ -314,8 +328,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,.sidebar-item:focu
   .stat-grid{grid-template-columns:repeat(2,1fr);}
   .stat-grid-2{grid-template-columns:1fr 1fr;}
   .form-grid-3{grid-template-columns:1fr 1fr;}
-  .modal{padding:18px;}
+  .modal-overlay{align-items:flex-start;padding:12px 8px;}
+  .modal{padding:16px;width:100%;max-height:calc(100dvh - 24px);margin:auto 0;}
   .modal.wide{max-width:100%;}
+  .bill-table{min-width:760px;}
+  .bill-table .col-item{width:220px;min-width:220px;}
   .users-management-grid{grid-template-columns:1fr;}
 }
 @media (max-width: 520px){
@@ -327,11 +344,18 @@ button:focus-visible,input:focus-visible,select:focus-visible,.sidebar-item:focu
   .totals-row{gap:12px;flex-direction:column;align-items:flex-end;}
   .login-card{min-height:0;padding:24px 18px;}
   .login-recovery-modal{min-height:0;padding:24px 18px;}
+  .modal{border-radius:10px;padding:14px 12px;}
+  .modal-head{margin-bottom:14px;}
+  .modal-head h3{font-size:14px;}
+  .form-grid-2,.form-grid-3{grid-template-columns:1fr;}
+  .bill-table td,.bill-table th{padding-left:8px;padding-right:8px;}
   .login-brand{font-size:15px;margin-bottom:22px;}
   .login-heading h1{font-size:22px;}
   .login-sub{font-size:12px;}
   .login-role-tabs button{font-size:11.5px;padding:9px 5px;}
   .login-forgot{font-size:11.5px;}
+  .bill-table .col-item{width:220px;min-width:220px;}
+  .bill-table .col-price{width:120px;min-width:120px;}
   .bill-table .col-wt{width:70px;}
   .bill-table .col-amt{width:84px;}
   .list-toolbar{align-items:stretch;}
