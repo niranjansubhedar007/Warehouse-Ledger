@@ -42,6 +42,7 @@ export const NAV: NavItem[] = [
       { href: "/reports", label: "Sales Report", icon: Receipt, adminOnly: true },
       { href: "/reports/purchase", label: "Purchase Report", icon: ShoppingCart, adminOnly: true },
       { href: "/reports/profit", label: "Profit Report", icon: FileBarChart, adminOnly: true },
+      { href: "/reports/transport", label: "Transport Report", icon: Package, adminOnly: true },
       { href: "/reports/quotations", label: "Quotation Report", icon: FileText, adminOnly: true },
     ],
   },

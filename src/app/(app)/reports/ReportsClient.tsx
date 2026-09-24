@@ -40,7 +40,17 @@ interface ProfitRow {
   profit: number;
 }
 
-export function ReportsClient({ report }: { report: "sales" | "purchase" | "profit" }) {
+interface TransportRow {
+  id: number;
+  date: string;
+  charge_type: string;
+  description: string;
+  provider: string | null;
+  reference_number: string | null;
+  amount: number;
+}
+
+export function ReportsClient({ report }: { report: "sales" | "purchase" | "profit" | "transport" }) {
   const supabase = createClient();
   const showToast = useToast();
   const [startDate, setStartDate] = useState("");
@@ -50,6 +60,7 @@ export function ReportsClient({ report }: { report: "sales" | "purchase" | "prof
   const [salesRows, setSalesRows] = useState<SaleLineRow[]>([]);
   const [purchaseRows, setPurchaseRows] = useState<PurchaseRow[]>([]);
   const [profitRows, setProfitRows] = useState<ProfitRow[]>([]);
+  const [transportRows, setTransportRows] = useState<TransportRow[]>([]);
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [totalProfit, setTotalProfit] = useState(0);
 
@@ -69,9 +80,14 @@ export function ReportsClient({ report }: { report: "sales" | "purchase" | "prof
     if (startDate) purchaseQuery = purchaseQuery.gte("date", startDate);
     if (endDate) purchaseQuery = purchaseQuery.lte("date", endDate);
     const purchaseRes = await purchaseQuery;
+    let transportQuery = supabase.from("transport_charges").select("*").order("date", { ascending: false }).limit(2000);
+    if (startDate) transportQuery = transportQuery.gte("date", startDate);
+    if (endDate) transportQuery = transportQuery.lte("date", endDate);
+    const transportRes = await transportQuery;
 
     if (salesRes.error) showToast(salesRes.error.message);
     if (purchaseRes.error) showToast(purchaseRes.error.message);
+    if (transportRes.error) showToast(transportRes.error.message);
 
     const sales = salesRes.data || [];
     const saleIds = sales.map((s) => s.id);
@@ -126,10 +142,20 @@ export function ReportsClient({ report }: { report: "sales" | "purchase" | "prof
     const flatProfitRows: ProfitRow[] = Array.from(profitByItem.entries())
       .map(([item_id, v]) => ({ item_id, item_name: itemName(item_id), unitsSold: v.unitsSold, profit: v.profit }))
       .filter((r) => r.unitsSold > 0);
+    const flatTransportRows: TransportRow[] = (transportRes.data || []).map((charge) => ({
+      id: Number(charge.id),
+      date: charge.date,
+      charge_type: charge.charge_type,
+      description: charge.description,
+      provider: charge.provider,
+      reference_number: charge.reference_number,
+      amount: Number(charge.amount),
+    }));
 
     setSalesRows(flatSalesRows);
     setPurchaseRows(flatPurchaseRows);
     setProfitRows(flatProfitRows);
+    setTransportRows(flatTransportRows);
     setTotalRevenue(sales.reduce((s, sale) => s + Number(sale.grand_total), 0));
     setTotalProfit(flatSalesRows.reduce((s, r) => s + r.profit, 0));
     setLoading(false);
@@ -142,8 +168,8 @@ export function ReportsClient({ report }: { report: "sales" | "purchase" | "prof
   return (
     <div>
       <PageHeader
-        title={report === "sales" ? "Sales Report" : report === "purchase" ? "Purchase Report" : "Profit Report"}
-        subtitle={report === "sales" ? "Detailed sales history." : report === "purchase" ? "Detailed purchase history." : "Profit analysis by item."}
+        title={report === "sales" ? "Sales Report" : report === "purchase" ? "Purchase Report" : report === "profit" ? "Profit Report" : "Transport Report"}
+        subtitle={report === "sales" ? "Detailed sales history." : report === "purchase" ? "Detailed purchase history." : report === "profit" ? "Profit analysis by item." : "Material transport and courier charges."}
       />
 
       {report === "sales" && <SalesReportTab rows={salesRows} loading={loading} startDate={startDate} endDate={endDate} setStartDate={setStartDate} setEndDate={setEndDate} />}
@@ -151,6 +177,44 @@ export function ReportsClient({ report }: { report: "sales" | "purchase" | "prof
       {report === "profit" && (
         <ProfitReportTab rows={profitRows} loading={loading} totalRevenue={totalRevenue} totalProfit={totalProfit} startDate={startDate} endDate={endDate} setStartDate={setStartDate} setEndDate={setEndDate} />
       )}
+      {report === "transport" && <TransportReportTab rows={transportRows} loading={loading} startDate={startDate} endDate={endDate} setStartDate={setStartDate} setEndDate={setEndDate} />}
+    </div>
+  );
+}
+
+function TransportReportTab({ rows, loading, ...dates }: { rows: TransportRow[]; loading: boolean } & DateFilterProps) {
+  const { query, setQuery, page, setPage, totalPages, paged, totalCount, pageSize } = usePagedList(rows, (row, q) =>
+    row.charge_type.toLowerCase().includes(q) ||
+    row.description.toLowerCase().includes(q) ||
+    (row.provider || "").toLowerCase().includes(q) ||
+    (row.reference_number || "").toLowerCase().includes(q)
+  );
+  const total = rows.reduce((sum, row) => sum + row.amount, 0);
+  return (
+    <div>
+      <ReportToolbar query={query} setQuery={setQuery} placeholder="Search type, description, provider or reference" {...dates} />
+      <div className="stat-grid stat-grid-2">
+        <StatCard label="Transport Entries" value={rows.length} color="var(--blue)" />
+        <StatCard label="Total Charges" value={money(total)} color="var(--accent)" />
+      </div>
+      <div className="panel">
+        <div className="table-scroll">
+          <Table headers={["Sr", "Date", "Type", "Description", "Provider", "Reference", "Amount ₹"]}>
+            {loading ? <tr><Td colSpan={7} className="text-muted">Loading…</Td></tr> : paged.length === 0 ? <tr><Td colSpan={7} className="text-muted">No transport charges match your search.</Td></tr> : paged.map((row, idx) => (
+              <tr key={row.id}>
+                <Td>{(page - 1) * pageSize + idx + 1}</Td>
+                <Td>{formatDate(row.date)}</Td>
+                <Td>{row.charge_type}</Td>
+                <Td>{row.description}</Td>
+                <Td>{row.provider || "—"}</Td>
+                <Td>{row.reference_number || "—"}</Td>
+                <Td className="num">{money(row.amount)}</Td>
+              </tr>
+            ))}
+          </Table>
+        </div>
+        <Pagination page={page} totalPages={totalPages} totalCount={totalCount} pageSize={pageSize} onChange={setPage} />
+      </div>
     </div>
   );
 }
