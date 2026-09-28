@@ -29,12 +29,17 @@ export function SalesClient() {
   const supabase = createClient();
   const showToast = useToast();
   const [items, setItems] = useState<Item[]>([]);
+  const [stockBlockedQuotes, setStockBlockedQuotes] = useState<QuotationRow[]>([]);
+  const [stockBlockedQuotesLoading, setStockBlockedQuotesLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<QuotationRow | null>(null);
   const [viewing, setViewing] = useState<QuotationRow | null>(null);
   const [viewingType, setViewingType] = useState<"quotation" | "bill">("quotation");
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<"quotations" | "bills">("quotations");
+  const [billingTab, setBillingTab] = useState<"finalized" | "awaitingStock">("finalized");
+  const [stockBlockedQuery, setStockBlockedQuery] = useState("");
+  const [stockBlockedPage, setStockBlockedPage] = useState(1);
   const [quotationStatus, setQuotationStatus] = useState<"" | "pending" | "done" | "rejected">("");
   const [quotationStartDate, setQuotationStartDate] = useState("");
   const [quotationEndDate, setQuotationEndDate] = useState("");
@@ -91,14 +96,16 @@ export function SalesClient() {
     if (data) {
       const flatItems = data.flatMap(q => q.quotation_items);
       const itemIds = flatItems.map(i => i.item_id);
-      const { data: itemDetails } = await supabase.from("items").select("id, name, shipping_weight").in("id", itemIds);
+      const { data: itemDetails, error: itemDetailsError } = await supabase.from("items").select("id, name, shipping_weight, current_stock").in("id", itemIds);
+      if (itemDetailsError) showToast(itemDetailsError.message, "error");
       const itemMap = new Map(itemDetails?.map(i => [i.id, i]) || []);
       const enrichedData = data.map(q => ({
         ...q,
         quotation_items: q.quotation_items.map(i => ({
           ...i,
           shipping_weight: itemMap.get(i.item_id)?.shipping_weight || 0,
-          item_name: itemMap.get(i.item_id)?.name || `Item ${i.item_id}`
+          item_name: itemMap.get(i.item_id)?.name || `Item ${i.item_id}`,
+          current_stock: itemMap.get(i.item_id)?.current_stock ?? null,
         }))
       }));
       return { data: enrichedData as unknown as QuotationRow[], total: count || 0 };
@@ -108,6 +115,101 @@ export function SalesClient() {
 
   const quotationsList = useServerPagedList(loadQuotationsPage);
   const { data: quotations, loading: quotesLoading, reload: reloadQuotes, query: quotesQuery, setQuery: setQuotesQuery, page: quotesPage, setPage: setQuotesPage, totalPages: quotesTotalPages, totalCount: quotesTotalCount, pageSize: quotesPageSize } = quotationsList;
+
+  const hasSufficientStock = (quotation: QuotationRow) => {
+    if (quotation.quotation_items.length === 0) return false;
+
+    const requiredByItem = new Map<string, number>();
+    for (const line of quotation.quotation_items) {
+      requiredByItem.set(line.item_id, (requiredByItem.get(line.item_id) || 0) + Number(line.quantity));
+    }
+
+    return Array.from(requiredByItem.entries()).every(([itemId, required]) => {
+      const item = quotation.quotation_items.find((line) => line.item_id === itemId);
+      return item?.current_stock !== null && item?.current_stock !== undefined && item.current_stock >= required;
+    });
+  };
+
+  const getStockWarning = (quotation: QuotationRow) => {
+    const requiredByItem = new Map<string, number>();
+    for (const line of quotation.quotation_items) {
+      requiredByItem.set(line.item_id, (requiredByItem.get(line.item_id) || 0) + Number(line.quantity));
+    }
+
+    const warnings = Array.from(requiredByItem.entries())
+      .map(([itemId, required]) => {
+        const item = quotation.quotation_items.find((line) => line.item_id === itemId);
+        const available = item?.current_stock ?? 0;
+        return available < required
+          ? `${item?.item_name || `Item ${itemId}`}: available ${available}, required ${required}`
+          : null;
+      })
+      .filter((warning): warning is string => warning !== null);
+
+    return warnings.length > 0 ? `Insufficient stock — ${warnings.join("; ")}` : "";
+  };
+
+  const loadStockBlockedQuotations = useCallback(async () => {
+    setStockBlockedQuotesLoading(true);
+    const { data, error } = await supabase
+      .from("quotations")
+      .select("id, quotation_number, date, customer_name, customer_mobile, subtotal, discount, tax, shipping_charge, grand_total, status, quotation_items(quantity, selling_price, item_id), sales(id, bill_number)")
+      .eq("status", "done")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      showToast(error.message, "error");
+      setStockBlockedQuotesLoading(false);
+      return;
+    }
+
+    const unbilledQuotes = (data || []).filter((quotation) => !quotation.sales?.length);
+    const itemIds = Array.from(new Set(unbilledQuotes.flatMap((quotation) => quotation.quotation_items.map((line) => line.item_id))));
+    const { data: itemDetails, error: itemDetailsError } = itemIds.length
+      ? await supabase.from("items").select("id, name, shipping_weight, current_stock").in("id", itemIds)
+      : { data: [], error: null };
+
+    if (itemDetailsError) {
+      showToast(itemDetailsError.message, "error");
+      setStockBlockedQuotesLoading(false);
+      return;
+    }
+
+    const itemMap = new Map(itemDetails?.map((item) => [item.id, item]) || []);
+    const enrichedQuotes = unbilledQuotes.map((quotation) => ({
+      ...quotation,
+      quotation_items: quotation.quotation_items.map((line) => ({
+        ...line,
+        item_name: itemMap.get(line.item_id)?.name || `Item ${line.item_id}`,
+        shipping_weight: itemMap.get(line.item_id)?.shipping_weight || 0,
+        current_stock: itemMap.get(line.item_id)?.current_stock ?? null,
+      })),
+    })) as unknown as QuotationRow[];
+
+    setStockBlockedQuotes(enrichedQuotes.filter((quotation) => !hasSufficientStock(quotation)));
+    setStockBlockedQuotesLoading(false);
+  }, [supabase, showToast]);
+
+  useEffect(() => {
+    void Promise.resolve().then(loadStockBlockedQuotations);
+  }, [loadStockBlockedQuotations]);
+
+  const filteredStockBlockedQuotes = stockBlockedQuotes.filter((quotation) => {
+    const search = stockBlockedQuery.trim().toLowerCase();
+    return !search ||
+      quotation.quotation_number.toLowerCase().includes(search) ||
+      quotation.customer_name.toLowerCase().includes(search) ||
+      getStockWarning(quotation).toLowerCase().includes(search);
+  });
+  const stockBlockedPageSize = 10;
+  const stockBlockedTotalPages = Math.ceil(filteredStockBlockedQuotes.length / stockBlockedPageSize);
+  const visibleStockBlockedPage = stockBlockedTotalPages
+    ? Math.min(stockBlockedPage, stockBlockedTotalPages)
+    : 1;
+  const visibleStockBlockedQuotes = filteredStockBlockedQuotes.slice(
+    (visibleStockBlockedPage - 1) * stockBlockedPageSize,
+    visibleStockBlockedPage * stockBlockedPageSize
+  );
 
   const saveDocument = async (mode: "quotation", doc: {
     id?: string;
@@ -149,6 +251,7 @@ export function SalesClient() {
     if (error) { showToast(error.message); return false; }
     showToast(doc.id ? "Quotation updated successfully." : "Quotation created successfully.", "success");
     reloadQuotes();
+    loadStockBlockedQuotations();
     setCreating(false);
     setEditing(null);
     return true;
@@ -160,6 +263,7 @@ export function SalesClient() {
     else {
       showToast(`Quotation marked as ${newStatus}.`, "success");
       reloadQuotes();
+      loadStockBlockedQuotations();
     }
   };
 
@@ -171,7 +275,37 @@ export function SalesClient() {
       showToast("Converted to bill successfully and stock updated.", "success");
       reloadQuotes();
       reloadSales();
+      loadItems();
+      loadStockBlockedQuotations();
     }
+  };
+
+  const downloadQuotationPDF = async (quotation: QuotationRow) => {
+    const requiredByItem = new Map<string, number>();
+    for (const line of quotation.quotation_items) {
+      requiredByItem.set(line.item_id, (requiredByItem.get(line.item_id) || 0) + Number(line.quantity));
+    }
+    const itemIds = Array.from(requiredByItem.keys());
+    const { data, error } = await supabase
+      .from("items")
+      .select("id, current_stock")
+      .in("id", itemIds);
+
+    if (error) {
+      showToast(error.message, "error");
+      return;
+    }
+    const stockByItem = new Map(data.map((item) => [item.id, item.current_stock]));
+    const unavailable = Array.from(requiredByItem.entries()).find(
+      ([itemId, required]) => (stockByItem.get(itemId) ?? -1) < required
+    );
+    if (unavailable) {
+      showToast("Cannot download the PDF: one or more items do not have enough stock.", "error");
+      reloadQuotes();
+      return;
+    }
+
+    downloadPDF(quotation);
   };
 
   const downloadPDF = (q: QuotationRow, documentTitle = "QUOTATION", filePrefix = "quotation") => {
@@ -455,9 +589,11 @@ export function SalesClient() {
                             <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => setEditing(q)}>
                               <Pencil size={14} /> Edit
                             </button>
-                            <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => downloadPDF(q)}>
-                              <Download size={14} /> PDF
-                            </button>
+                            {hasSufficientStock(q) && (
+                              <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => downloadQuotationPDF(q)}>
+                                <Download size={14} /> PDF
+                              </button>
+                            )}
                             <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => setConfirmAction({ modalTitle: "Update Status", title: `Mark as ${q.status === "pending" ? "Done" : "Pending"}?`, onConfirm: () => updateQuotationStatus(q.id, q.status === "pending" ? "done" : "pending") })}>
                               {q.status === "pending" ? <><CheckCircle size={14} /> Done</> : <><Clock size={14} /> Pending</>}
                             </button>
@@ -465,9 +601,24 @@ export function SalesClient() {
                               <X size={14} /> Reject
                             </button>
                             {q.status === "done" && (
-                              <button className="btn-primary" style={{ padding: '4px 8px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => setConfirmAction({ modalTitle: "Convert to Bill", title: "Convert this quotation to a final bill?", onConfirm: () => convertToBill(q.id) })}>
-                                <FileText size={14} /> Create Bill
-                              </button>
+                              hasSufficientStock(q) ? (
+                                <button
+                                  className="btn-primary"
+                                  style={{ padding: '4px 8px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}
+                                  onClick={() => setConfirmAction({ modalTitle: "Convert to Bill", title: "Convert this quotation to a final bill?", onConfirm: () => convertToBill(q.id) })}
+                                >
+                                  <FileText size={14} /> Create Bill
+                                </button>
+                              ) : (
+                                <button
+                                  className="btn-secondary"
+                                  style={{ padding: '4px 8px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}
+                                  title={getStockWarning(q)}
+                                  onClick={() => { setViewingType("quotation"); setViewing(q); }}
+                                >
+                                  <Eye size={14} /> View 
+                                </button>
+                              )
                             )}
                           </div>
                         )}
@@ -482,59 +633,137 @@ export function SalesClient() {
         </section>
       ) : (
         <section>
-          <PageHeader title="Billing" subtitle="List of finalized bills.">
+          <PageHeader title="Billing" subtitle="Finalized bills and quotations waiting for sufficient stock.">
           </PageHeader>
-          <div className="list-toolbar">
-            <SearchBar value={salesQuery} onChange={setSalesQuery} placeholder="Search bill no or customer" />
+          <div className="tab-row bordered" role="tablist" aria-label="Billing views">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={billingTab === "finalized"}
+              className={`tab ${billingTab === "finalized" ? "active" : ""}`}
+              onClick={() => setBillingTab("finalized")}
+            >
+              Normal Bills
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={billingTab === "awaitingStock"}
+              className={`tab ${billingTab === "awaitingStock" ? "active" : ""}`}
+              onClick={() => setBillingTab("awaitingStock")}
+            >
+              Quotations Awaiting Stock ({stockBlockedQuotes.length})
+            </button>
           </div>
-          <div className="panel">
-            <div className="table-scroll">
-              <Table headers={["Sr", "Bill No", "Date", "Customer", "Items", "Weight", "Subtotal", "Grand Total", "Actions"]}>
-                {salesLoading ? (
-                  <tr><Td colSpan={9} className="text-muted">Loading…</Td></tr>
-                ) : sales.length === 0 ? (
-                  <tr><Td colSpan={9} className="text-muted">No bills match your search.</Td></tr>
-                ) : (
-                  sales.map((s, idx) => {
-                    const totalWeight = s.sale_items.reduce((a, l) => a + Number(l.shipping_weight), 0);
-                    return (
-                      <tr key={s.id}>
-                        <Td>{(salesPage - 1) * salesPageSize + idx + 1}</Td>
-                        <Td className="mono">{s.bill_number}</Td>
-                        <Td>{formatDate(s.date)}</Td>
-                        <Td>{s.customer_name}</Td>
-                        <Td className="num">{s.sale_items.length}</Td>
-                        <Td className="num">{totalWeight.toFixed(2)} kg</Td>
-                        <Td className="num">{money(s.subtotal)}</Td>
-                        <Td className="strong num">{money(Math.abs(Number(s.grand_total)))}</Td>
+          {billingTab === "awaitingStock" ? (
+            <>
+              <div className="list-toolbar">
+                <SearchBar
+                  value={stockBlockedQuery}
+                  onChange={(query) => {
+                    setStockBlockedQuery(query);
+                    setStockBlockedPage(1);
+                  }}
+                  placeholder="Search quotation no, customer, or item"
+                />
+              </div>
+              <div className="panel" style={{ marginBottom: 20 }}>
+              <div className="table-scroll">
+                <Table headers={["Sr", "Quotation No", "Date", "Customer", "Stock Alert", "Grand Total", "Actions"]}>
+                  {stockBlockedQuotesLoading ? (
+                    <tr><Td colSpan={7} className="text-muted">Checking quotation stock…</Td></tr>
+                  ) : filteredStockBlockedQuotes.length > 0 ? (
+                    visibleStockBlockedQuotes.map((quotation, index) => (
+                      <tr key={quotation.id}>
+                        <Td>{(visibleStockBlockedPage - 1) * stockBlockedPageSize + index + 1}</Td>
+                        <Td className="mono">{quotation.quotation_number}</Td>
+                        <Td>{formatDate(quotation.date)}</Td>
+                        <Td>{quotation.customer_name}</Td>
+                        <Td className="text-danger">{getStockWarning(quotation)}</Td>
+                        <Td className="strong num">{money(quotation.grand_total)}</Td>
                         <Td>
-                          <div style={{ display: "flex", gap: 8 }}>
-                            <button
-                              type="button"
-                              className="btn-secondary"
-                              style={{ padding: "4px 8px", fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}
-                              onClick={() => viewBill(s)}
-                            >
-                              <Eye size={14} /> View
-                            </button>
-                            <button
-                              type="button"
-                              className="btn-secondary"
-                              style={{ padding: "4px 8px", fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}
-                              onClick={() => downloadBillPDF(s)}
-                            >
-                              <Download size={14} />  PDF
-                            </button>
-                          </div>
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            style={{ padding: "4px 8px", fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}
+                            onClick={() => { setViewingType("quotation"); setViewing(quotation); }}
+                          >
+                            <Eye size={14} /> View
+                          </button>
                         </Td>
                       </tr>
-                    );
-                  })
-                )}
-              </Table>
-            </div>
-            <Pagination page={salesPage} totalPages={salesTotalPages} totalCount={salesTotalCount} pageSize={salesPageSize} onChange={setSalesPage} />
-          </div>
+                    ))
+                  ) : (
+                    <tr><Td colSpan={7} className="text-muted">
+                      {stockBlockedQuotes.length > 0 ? "No quotations match your search." : "No quotations are waiting for stock."}
+                    </Td></tr>
+                  )}
+                </Table>
+              </div>
+              <Pagination
+                page={visibleStockBlockedPage}
+                totalPages={stockBlockedTotalPages}
+                totalCount={filteredStockBlockedQuotes.length}
+                pageSize={stockBlockedPageSize}
+                onChange={setStockBlockedPage}
+              />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="list-toolbar">
+                <SearchBar value={salesQuery} onChange={setSalesQuery} placeholder="Search bill no or customer" />
+              </div>
+              <div className="panel">
+                <div className="table-scroll">
+                  <Table headers={["Sr", "Bill No", "Date", "Customer", "Items", "Weight", "Subtotal", "Grand Total", "Actions"]}>
+                    {salesLoading ? (
+                      <tr><Td colSpan={9} className="text-muted">Loading…</Td></tr>
+                    ) : sales.length === 0 ? (
+                      <tr><Td colSpan={9} className="text-muted">No bills match your search.</Td></tr>
+                    ) : (
+                      sales.map((s, idx) => {
+                        const totalWeight = s.sale_items.reduce((a, l) => a + Number(l.shipping_weight), 0);
+                        return (
+                          <tr key={s.id}>
+                            <Td>{(salesPage - 1) * salesPageSize + idx + 1}</Td>
+                            <Td className="mono">{s.bill_number}</Td>
+                            <Td>{formatDate(s.date)}</Td>
+                            <Td>{s.customer_name}</Td>
+                            <Td className="num">{s.sale_items.length}</Td>
+                            <Td className="num">{totalWeight.toFixed(2)} kg</Td>
+                            <Td className="num">{money(s.subtotal)}</Td>
+                            <Td className="strong num">{money(Math.abs(Number(s.grand_total)))}</Td>
+                            <Td>
+                              <div style={{ display: "flex", gap: 8 }}>
+                                <button
+                                  type="button"
+                                  className="btn-secondary"
+                                  style={{ padding: "4px 8px", fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}
+                                  onClick={() => viewBill(s)}
+                                >
+                                  <Eye size={14} /> View
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn-secondary"
+                                  style={{ padding: "4px 8px", fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}
+                                  onClick={() => downloadBillPDF(s)}
+                                >
+                                  <Download size={14} /> PDF
+                                </button>
+                              </div>
+                            </Td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </Table>
+                </div>
+                <Pagination page={salesPage} totalPages={salesTotalPages} totalCount={salesTotalCount} pageSize={salesPageSize} onChange={setSalesPage} />
+              </div>
+            </>
+          )}
         </section>
       )}
 

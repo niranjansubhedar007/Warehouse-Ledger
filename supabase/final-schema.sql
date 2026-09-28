@@ -412,13 +412,46 @@ DECLARE
     v_sale_id BIGINT;
     v_q_item RECORD;
     v_item_details RECORD;
+    v_required_stock NUMERIC;
 BEGIN
     -- Get quotation details
-    SELECT * INTO v_quotation FROM quotations WHERE id = p_quotation_id;
+    SELECT * INTO v_quotation FROM quotations WHERE id = p_quotation_id FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Quotation not found.';
+    END IF;
 
     IF v_quotation.status != 'done' THEN
         RAISE EXCEPTION 'Only quotations marked as "done" can be converted to a bill.';
     END IF;
+
+    IF EXISTS (SELECT 1 FROM sales WHERE quotation_id = p_quotation_id) THEN
+        RAISE EXCEPTION 'This quotation has already been converted to a bill.';
+    END IF;
+
+    -- Lock and validate stock before creating the bill or changing inventory.
+    FOR v_q_item IN
+        SELECT item_id, SUM(quantity) AS quantity
+        FROM quotation_items
+        WHERE quotation_id = p_quotation_id
+        GROUP BY item_id
+        ORDER BY item_id
+    LOOP
+        SELECT current_stock INTO v_item_details
+        FROM items
+        WHERE id = v_q_item.item_id
+        FOR UPDATE;
+
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'Item % no longer exists.', v_q_item.item_id;
+        END IF;
+
+        v_required_stock := v_q_item.quantity;
+        IF v_item_details.current_stock IS NULL OR v_item_details.current_stock < v_required_stock THEN
+            RAISE EXCEPTION 'Insufficient stock for item %: available %, required %.',
+                v_q_item.item_id, v_item_details.current_stock, v_required_stock;
+        END IF;
+    END LOOP;
 
     -- Create sale
     INSERT INTO sales (

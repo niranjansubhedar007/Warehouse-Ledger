@@ -286,20 +286,22 @@ button:focus-visible,input:focus-visible,select:focus-visible,.sidebar-item:focu
 .chart-wrap{width:100%;}
 .chart-empty{font-size:13px;color:var(--text-faint);padding:32px 0;text-align:center;}
 
-.bill-table{table-layout:fixed;min-width:760px;}
+.bill-table{table-layout:fixed;width:max-content;min-width:680px;}
 .bill-table .col-sr{width:34px;}
 .bill-table .col-item{width:220px;}
 .bill-table .col-stock{width:72px;}
 .bill-table .col-qty{width:84px;}
 .bill-table .col-price{width:120px;}
 .bill-table .col-wt{width:88px;}
-.bill-table .col-amt{width:104px;}
-.bill-table .col-del{width:34px;}
+.bill-table .col-amt{width:110px;}
+.bill-table .col-del{width:40px;}
 .bill-table td input.input,.bill-table td select.input{width:100%;min-width:0;padding:7px 8px;}
 .bill-table td:nth-child(2){width:220px;min-width:220px;vertical-align:top;}
 .bill-table td:nth-child(2) .item-combobox-trigger{min-height:42px;white-space:normal;line-height:1.25;}
 .bill-table td:nth-child(2) .item-combobox-trigger span:first-child{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;white-space:normal;overflow-wrap:anywhere;}
 .bill-table td:nth-child(5) input.input{min-width:100px;pointer-events:auto;position:relative;z-index:1;}
+.bill-table th:last-child,.bill-table td:last-child{width:40px;min-width:40px;padding-left:4px;padding-right:4px;}
+.bill-table td:nth-last-child(2){padding-right:6px;}
 
 .form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .form-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
@@ -331,7 +333,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,.sidebar-item:focu
   .modal-overlay{align-items:flex-start;padding:12px 8px;}
   .modal{padding:16px;width:100%;max-height:calc(100dvh - 24px);margin:auto 0;}
   .modal.wide{max-width:100%;}
-  .bill-table{min-width:760px;}
+  .bill-table{min-width:680px;}
   .bill-table .col-item{width:220px;min-width:220px;}
   .users-management-grid{grid-template-columns:1fr;}
 }
@@ -357,7 +359,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,.sidebar-item:focu
   .bill-table .col-item{width:220px;min-width:220px;}
   .bill-table .col-price{width:120px;min-width:120px;}
   .bill-table .col-wt{width:70px;}
-  .bill-table .col-amt{width:84px;}
+  .bill-table .col-amt{width:110px;min-width:110px;}
   .list-toolbar{align-items:stretch;}
   .list-toolbar .search-wrap{max-width:none;}
   .pagination-bar{justify-content:center;text-align:center;}

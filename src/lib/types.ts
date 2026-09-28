@@ -69,6 +69,7 @@ export interface QuotationRow extends Quotation {
     shipping_weight: number;
     selling_price: number;
     item_name: string;
+    current_stock?: number | null;
   }[];
   sales?: { id: string; bill_number: string }[];
 }

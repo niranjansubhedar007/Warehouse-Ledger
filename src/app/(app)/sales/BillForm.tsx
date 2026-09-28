@@ -87,19 +87,7 @@ export function BillForm({ items, onSave, onClose, saving, editingQuotation, ini
   const subtotal = lines.reduce((s, ln) => s + ln.quantity * ln.selling_price, 0);
   const grandTotal = subtotal + Number(tax || 0) + Number(shippingCharge || 0);
 
-  // Calculate total requested per item to validate against stock correctly
-  const requestedStock = lines.reduce((acc, ln) => {
-    acc[ln.item_id] = (acc[ln.item_id] || 0) + ln.quantity;
-    return acc;
-  }, {} as Record<string, number>);
-
-  const stockErrors = lines.map(ln => {
-    const item = items.find(i => String(i.id) === String(ln.item_id));
-    return item ? requestedStock[ln.item_id] > item.current_stock : false;
-  });
-  const hasStockError = stockErrors.some(err => err);
-
-  const canSave = Boolean(customerName.trim()) && Boolean(customerMobile.trim()) && lines.length > 0 && lines.every((l) => Boolean(l.item_id) && l.quantity > 0) && !hasStockError;
+  const canSave = Boolean(customerName.trim()) && Boolean(customerMobile.trim()) && lines.length > 0 && lines.every((l) => Boolean(l.item_id) && l.quantity > 0);
 
   return (
     <Modal title={editingQuotation ? "Edit Quotation" : "New Quotation"} onClose={onClose} wide>
@@ -141,7 +129,6 @@ export function BillForm({ items, onSave, onClose, saving, editingQuotation, ini
               <tbody style={{ position: 'relative' }}>
                 {lines.map((ln, idx) => {
                   const item = items.find(i => String(i.id) === String(ln.item_id));
-                  const isOverstock = stockErrors[idx];
                   return (
                     <tr key={idx} style={{ borderBottom: "1px solid var(--border)" }}>
                       <td style={{ textAlign: 'center', color: 'var(--text-dim)' }}>{idx + 1}</td>
@@ -160,26 +147,21 @@ export function BillForm({ items, onSave, onClose, saving, editingQuotation, ini
                           }}
                         />
                       </td>
-                      <td className="num" style={{ textAlign: 'center', color: isOverstock ? 'red' : 'inherit', fontWeight: isOverstock ? 600 : 400 }}>
+                      <td className="num" style={{ textAlign: 'center' }}>
                         {item?.current_stock || 0}
                       </td>
                       <td>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                          <input
-                            type="number"
-                            min="1"
-                            className={`input ${isOverstock ? "text-danger" : ""}`}
-                            value={ln.quantity || ""}
-                            onInput={normalizeNumberInputOnInput}
-                            onChange={(e) => {
-                              const val = Number(normalizeNumberInput(e.target.value) || 0);
-                              updateLine(idx, { quantity: val });
-                            }}
-                          />
-                          {isOverstock && (
-                            <span style={{ fontSize: 10, color: 'red', textAlign: 'center' }}>Too many!</span>
-                          )}
-                        </div>
+                        <input
+                          type="number"
+                          min="1"
+                          className="input"
+                          value={ln.quantity || ""}
+                          onInput={normalizeNumberInputOnInput}
+                          onChange={(e) => {
+                            const val = Number(normalizeNumberInput(e.target.value) || 0);
+                            updateLine(idx, { quantity: val });
+                          }}
+                        />
                       </td>
                       <td>
                         <input
