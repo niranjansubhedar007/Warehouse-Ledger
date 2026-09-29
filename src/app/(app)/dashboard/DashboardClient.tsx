@@ -4,12 +4,14 @@ import { createClient } from "@/lib/supabase/client";
 import type { Item } from "@/lib/types";
 import { PageHeader, StatCard, Table, Td } from "@/components/ui";
 import { SalesBarChart } from "@/components/SalesBarChart";
-import { formatDate, money, todayISO } from "@/lib/format";
+import { formatDate, money } from "@/lib/format";
+import { useToast } from "@/components/ToastProvider";
 
 interface SaleRow {
   date: string;
   grand_total: number;
-  sale_items: { profit: number }[];
+  discount: number;
+  sale_items: { quantity: number; selling_price: number; purchase_price: number }[];
 }
 interface PurchaseRow {
   date: string;
@@ -24,6 +26,7 @@ const daysAgoISO = (n: number) => {
 
 export function DashboardClient() {
   const supabase = createClient();
+  const showToast = useToast();
   const [range, setRange] = useState<"today" | "yesterday" | "7d" | "30d">("7d");
   const [items, setItems] = useState<Item[]>([]);
   const [sales, setSales] = useState<SaleRow[]>([]);
@@ -35,49 +38,73 @@ export function DashboardClient() {
     const cutoff = daysAgoISO(31);
     const [itemsRes, salesRes, purchasesRes] = await Promise.all([
       supabase.from("items").select("*").order("current_stock", { ascending: true }),
-      supabase.from("sales").select("date, grand_total, sale_items(profit)").gte("date", cutoff),
+      supabase.from("sales").select("date, grand_total, discount, sale_items(quantity, selling_price, purchase_price)").gte("date", cutoff),
       supabase.from("purchases").select("date, total_amount").gte("date", cutoff),
     ]);
-    if (!itemsRes.error) setItems(itemsRes.data as Item[]);
-    if (!salesRes.error) setSales(salesRes.data as unknown as SaleRow[]);
-    if (!purchasesRes.error) setPurchases(purchasesRes.data as PurchaseRow[]);
+    if (itemsRes.error) showToast(itemsRes.error.message, "error");
+    else setItems(itemsRes.data as Item[]);
+    if (salesRes.error) showToast(salesRes.error.message, "error");
+    else setSales(salesRes.data as unknown as SaleRow[]);
+    if (purchasesRes.error) showToast(purchasesRes.error.message, "error");
+    else setPurchases(purchasesRes.data as PurchaseRow[]);
     setLoading(false);
-  }, [supabase]);
+  }, [supabase, showToast]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const today = todayISO();
   const lowStockItems = useMemo(
     () => items.filter((i) => i.current_stock < i.low_stock_threshold),
     [items]
   );
 
-  const todaysSales = sales.filter((s) => s.date === today).reduce((sum, s) => sum + Number(s.grand_total), 0);
-  const todaysPurchase = purchases.filter((p) => p.date === today).reduce((sum, p) => sum + Number(p.total_amount), 0);
-  const todaysProfit = sales
-    .filter((s) => s.date === today)
-    .reduce((sum, s) => sum + s.sale_items.reduce((a, l) => a + Number(l.profit), 0), 0);
+  const rangeDays = range === "today" ? 1 : range === "yesterday" ? 1 : range === "7d" ? 7 : 30;
+  const rangeEndOffset = range === "yesterday" ? 1 : 0;
+  const rangeStartDate = daysAgoISO(rangeEndOffset + rangeDays - 1);
+  const rangeEndDate = daysAgoISO(rangeEndOffset);
+  const isInSelectedRange = (date: string) => date >= rangeStartDate && date <= rangeEndDate;
+  const periodSales = sales
+    .filter((sale) => isInSelectedRange(sale.date))
+    .reduce((sum, sale) => sum + Number(sale.grand_total), 0);
+  const periodPurchase = purchases
+    .filter((purchase) => isInSelectedRange(purchase.date))
+    .reduce((sum, purchase) => sum + Number(purchase.total_amount), 0);
+  const periodProfit = sales
+    .filter((sale) => isInSelectedRange(sale.date))
+    .reduce((sum, s) => {
+      const itemProfit = s.sale_items.reduce(
+        (subtotal, line) => subtotal + (Number(line.selling_price) - Number(line.purchase_price)) * Number(line.quantity),
+        0
+      );
+      return sum + itemProfit - Number(s.discount || 0);
+    }, 0);
 
-  const rangeDays = range === "today" ? 1 : range === "yesterday" ? 2 : range === "7d" ? 7 : 30;
+  const rangeLabel = range === "today"
+    ? "Today's"
+    : range === "yesterday"
+      ? "Yesterday's"
+      : range === "7d"
+        ? "Last 7 Days'"
+        : "Last 30 Days'";
+
   const chartData = useMemo(() => {
     const days = [];
-    for (let i = rangeDays - 1; i >= 0; i--) {
+    for (let i = rangeDays - 1 + rangeEndOffset; i >= rangeEndOffset; i--) {
       const d = daysAgoISO(i);
       const total = sales.filter((s) => s.date === d).reduce((sum, s) => sum + Number(s.grand_total), 0);
       days.push({ date: formatDate(d).slice(0, 5), total });
     }
     return days;
-  }, [sales, rangeDays]);
+  }, [sales, rangeDays, rangeEndOffset]);
 
   return (
     <div>
       <PageHeader title="Dashboard" subtitle="Today's activity across purchase, sales and stock." />
       <div className="stat-grid">
-        <StatCard label="Today's Sales" value={money(Math.abs(todaysSales))} color="var(--green)" />
-        <StatCard label="Today's Purchase" value={money(todaysPurchase)} color="var(--blue)" />
-        <StatCard label="Today's Profit" value={money(todaysProfit)} color="var(--orange)" />
+        <StatCard label={`${rangeLabel} Sales`} value={money(Math.abs(periodSales))} color="var(--green)" />
+        <StatCard label={`${rangeLabel} Purchase`} value={money(periodPurchase)} color="var(--blue)" />
+        <StatCard label={`${rangeLabel} Profit`} value={money(periodProfit)} color="var(--orange)" />
         <StatCard label="Low Stock Items" value={loading ? "…" : lowStockItems.length} color="var(--accent)" />
       </div>
 
