@@ -33,6 +33,8 @@ export function SalesClient() {
   const [stockBlockedQuotesLoading, setStockBlockedQuotesLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<QuotationRow | null>(null);
+  const [editingBill, setEditingBill] = useState<SaleRow | null>(null);
+  const [billDiscount, setBillDiscount] = useState("");
   const [viewing, setViewing] = useState<QuotationRow | null>(null);
   const [viewingType, setViewingType] = useState<"quotation" | "bill">("quotation");
   const [saving, setSaving] = useState(false);
@@ -280,6 +282,36 @@ export function SalesClient() {
     }
   };
 
+  const saveBillDiscount = async () => {
+    if (!editingBill) return;
+
+    const discount = Number(billDiscount);
+    if (!Number.isFinite(discount) || discount < 0) {
+      showToast("Enter a valid discount amount.", "error");
+      return;
+    }
+    if (discount > editingBill.subtotal) {
+      showToast("Discount cannot be more than the bill subtotal.", "error");
+      return;
+    }
+
+    setSaving(true);
+    const { error } = await supabase.rpc("update_bill_discount", {
+      p_sale_id: editingBill.id,
+      p_discount: discount,
+    });
+    setSaving(false);
+
+    if (error) {
+      showToast(error.message, "error");
+      return;
+    }
+
+    showToast("Bill discount updated successfully.", "success");
+    setEditingBill(null);
+    reloadSales();
+  };
+
   const downloadQuotationPDF = async (quotation: QuotationRow) => {
     const requiredByItem = new Map<string, number>();
     for (const line of quotation.quotation_items) {
@@ -407,6 +439,7 @@ export function SalesClient() {
     const finalY = ((doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY || 76) + 5;
     const totals = [
       ["Subtotal", pdfMoney(q.subtotal)],
+      ...(isBill && q.discount > 0 ? [["Discount", `-${pdfMoney(q.discount)}`]] : []),
       ...(q.tax > 0 ? [["Tax", pdfMoney(q.tax)]] : []),
       ...(q.shipping_charge > 0 ? [["Shipping", pdfMoney(q.shipping_charge)]] : []),
       ["Grand Total", pdfMoney(q.grand_total)],
@@ -716,11 +749,11 @@ export function SalesClient() {
               </div>
               <div className="panel">
                 <div className="table-scroll">
-                  <Table headers={["Sr", "Bill No", "Date", "Customer", "Items", "Weight", "Subtotal", "Grand Total", "Actions"]}>
+                  <Table headers={["Sr", "Bill No", "Date", "Customer", "Items", "Weight", "Subtotal", "Discount", "Grand Total", "Actions"]}>
                     {salesLoading ? (
-                      <tr><Td colSpan={9} className="text-muted">Loading…</Td></tr>
+                      <tr><Td colSpan={10} className="text-muted">Loading…</Td></tr>
                     ) : sales.length === 0 ? (
-                      <tr><Td colSpan={9} className="text-muted">No bills match your search.</Td></tr>
+                      <tr><Td colSpan={10} className="text-muted">No bills match your search.</Td></tr>
                     ) : (
                       sales.map((s, idx) => {
                         const totalWeight = s.sale_items.reduce((a, l) => a + Number(l.shipping_weight), 0);
@@ -733,6 +766,7 @@ export function SalesClient() {
                             <Td className="num">{s.sale_items.length}</Td>
                             <Td className="num">{totalWeight.toFixed(2)} kg</Td>
                             <Td className="num">{money(s.subtotal)}</Td>
+                            <Td className="num">{money(s.discount)}</Td>
                             <Td className="strong num">{money(Math.abs(Number(s.grand_total)))}</Td>
                             <Td>
                               <div style={{ display: "flex", gap: 8 }}>
@@ -743,6 +777,17 @@ export function SalesClient() {
                                   onClick={() => viewBill(s)}
                                 >
                                   <Eye size={14} /> View
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn-secondary"
+                                  style={{ padding: "4px 8px", fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}
+                                  onClick={() => {
+                                    setEditingBill(s);
+                                    setBillDiscount(String(s.discount || 0));
+                                  }}
+                                >
+                                  <Pencil size={14} /> Edit
                                 </button>
                                 <button
                                   type="button"
@@ -769,6 +814,47 @@ export function SalesClient() {
 
       {creating && <BillForm items={items} saving={saving} onSave={saveDocument} onClose={() => setCreating(false)} />}
       {editing && <BillForm items={items} saving={saving} editingQuotation={editing} onSave={saveDocument} onClose={() => setEditing(null)} />}
+      {editingBill && (
+        <Modal title={`Edit Bill Discount ${editingBill.bill_number}`} onClose={() => setEditingBill(null)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <Field label="Bill Discount">
+              <div style={{ position: "relative" }}>
+                <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)" }}>₹</span>
+                <input
+                  type="number"
+                  min="0"
+                  max={editingBill.subtotal}
+                  step="0.01"
+                  className="input"
+                  style={{ paddingLeft: 20 }}
+                  value={billDiscount}
+                  onChange={(event) => setBillDiscount(event.target.value)}
+                />
+              </div>
+            </Field>
+            <div style={{ textAlign: "right", display: "flex", flexDirection: "column", gap: 6 }}>
+              <div>Subtotal: <span className="strong num">{money(editingBill.subtotal)}</span></div>
+              <div>Discount: <span className="strong num">{money(Number(billDiscount) || 0)}</span></div>
+              <div>Tax: <span className="strong num">{money(editingBill.tax)}</span></div>
+              <div>Shipping: <span className="strong num">{money(editingBill.shipping_charge)}</span></div>
+              <div className="strong" style={{ borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+                New Grand Total: {money(editingBill.subtotal - (Number(billDiscount) || 0) + editingBill.tax + editingBill.shipping_charge)}
+              </div>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button type="button" className="btn-secondary" onClick={() => setEditingBill(null)}>Cancel</button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={saving || billDiscount === "" || Number(billDiscount) < 0 || Number(billDiscount) > editingBill.subtotal}
+                onClick={saveBillDiscount}
+              >
+                {saving ? "Saving…" : "Save Discount"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
       {viewing && (
         <Modal title={`View ${viewingType === "bill" ? "Bill" : "Quotation"} ${viewing.quotation_number}`} onClose={() => setViewing(null)} wide>
           <div style={{ padding: "10px 0" }}>
@@ -803,6 +889,9 @@ export function SalesClient() {
             <div className="totals-row" style={{ marginTop: 20, justifyContent: "flex-end" }}>
               <div style={{ textAlign: "right", display: "flex", flexDirection: "column", gap: 4 }}>
                 <div>Subtotal: <span className="strong num">{money(viewing.subtotal)}</span></div>
+                {viewingType === "bill" && viewing.discount > 0 && (
+                  <div>Discount: <span className="strong num">-{money(viewing.discount)}</span></div>
+                )}
                 <div>Tax: <span className="strong num">{money(viewing.tax)}</span></div>
                 <div>Shipping: <span className="strong num">{money(viewing.shipping_charge)}</span></div>
                 <div style={{ fontSize: 18, marginTop: 8, borderTop: "1px solid var(--border)", paddingTop: 8 }}>

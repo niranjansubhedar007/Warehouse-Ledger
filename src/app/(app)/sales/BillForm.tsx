@@ -99,9 +99,8 @@ export function BillForm({ items, onSave, onClose, saving, editingQuotation, ini
           <Field label="Customer Mobile" required>
             <input
               type="tel"
-              inputMode="numeric"
+              inputMode="tel"
               className="input"
-              maxLength={10}
               required
               value={customerMobile}
               onChange={(e) => setCustomerMobile(e.target.value)}
