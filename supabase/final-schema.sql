@@ -644,6 +644,12 @@ begin
 end;
 $$;
 
+-- ===== supabase/migrations/014_add_is_checked_to_sale_items.sql =====
+ALTER TABLE public.sale_items
+ADD COLUMN IF NOT EXISTS is_checked BOOLEAN NOT NULL DEFAULT FALSE;
+
+NOTIFY pgrst, 'reload schema';
+
 -- ===== custom-auth.sql =====
 -- Run this after creating the integer-ID public tables.
 -- Enable Authentication > Providers > Anonymous Sign-Ins in Supabase first.

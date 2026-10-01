@@ -22,8 +22,15 @@ interface SaleRow {
   tax: number;
   shipping_charge: number;
   grand_total: number;
-  sale_items: { item_id: string; quantity: number; shipping_weight: number; selling_price: number; item_name: string }[];
+  sale_items: { id: string; item_id: string; quantity: number; shipping_weight: number; selling_price: number; item_name: string; is_checked: boolean }[];
 }
+
+type ViewDocument = Omit<QuotationRow, "quotation_items"> & {
+  quotation_items: (QuotationRow["quotation_items"][number] & {
+    sale_item_id?: string;
+    is_checked?: boolean;
+  })[];
+};
 
 export function SalesClient() {
   const supabase = createClient();
@@ -35,7 +42,8 @@ export function SalesClient() {
   const [editing, setEditing] = useState<QuotationRow | null>(null);
   const [editingBill, setEditingBill] = useState<SaleRow | null>(null);
   const [billDiscount, setBillDiscount] = useState("");
-  const [viewing, setViewing] = useState<QuotationRow | null>(null);
+  const [viewing, setViewing] = useState<ViewDocument | null>(null);
+  const [updatingBillItems, setUpdatingBillItems] = useState<Set<string>>(() => new Set());
   const [viewingType, setViewingType] = useState<"quotation" | "bill">("quotation");
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<"quotations" | "bills">("quotations");
@@ -61,7 +69,7 @@ export function SalesClient() {
 
   const loadSalesPage = useCallback(async (page: number, query: string) => {
     const from = (page - 1) * 10;
-    let request = supabase.from("sales").select("id, bill_number, date, customer_name, customer_mobile, subtotal, discount, tax, shipping_charge, grand_total, sale_items(quantity, selling_price, item_id, items(name))", { count: "exact" }).order("created_at", { ascending: false }).range(from, from + 9);
+    let request = supabase.from("sales").select("id, bill_number, date, customer_name, customer_mobile, subtotal, discount, tax, shipping_charge, grand_total, sale_items(id, quantity, selling_price, item_id, is_checked, items(name))", { count: "exact" }).order("created_at", { ascending: false }).range(from, from + 9);
     if (query.trim()) request = request.or(`bill_number.ilike.%${query.trim()}%,customer_name.ilike.%${query.trim()}%,customer_mobile.ilike.%${query.trim()}%`);
     const { data, error, count } = await request;
     if (error) showToast(error.message, "error");
@@ -75,7 +83,8 @@ export function SalesClient() {
         sale_items: s.sale_items.map(i => ({
           ...i,
           shipping_weight: itemMap.get(i.item_id)?.shipping_weight || 0,
-          item_name: itemMap.get(i.item_id)?.name || `Item ${i.item_id}`
+          item_name: itemMap.get(i.item_id)?.name || `Item ${i.item_id}`,
+          is_checked: i.is_checked ?? false,
         }))
       }));
       return { data: enrichedData as unknown as SaleRow[], total: count || 0 };
@@ -521,7 +530,52 @@ export function SalesClient() {
       grand_total: s.grand_total,
       status: "done",
       created_at: "",
-      quotation_items: s.sale_items,
+      quotation_items: s.sale_items.map((item) => ({
+        ...item,
+        sale_item_id: item.id,
+      })),
+    });
+  };
+
+  const updateBillItemChecked = async (saleItemId: string, isChecked: boolean) => {
+    if (!viewing || viewingType !== "bill") return;
+
+    const billId = viewing.id;
+    const previousValue = viewing.quotation_items.find((item) => item.sale_item_id === saleItemId)?.is_checked ?? false;
+    setUpdatingBillItems((current) => new Set(current).add(saleItemId));
+    setViewing((current) => current && current.id === billId
+      ? {
+          ...current,
+          quotation_items: current.quotation_items.map((item) =>
+            item.sale_item_id === saleItemId ? { ...item, is_checked: isChecked } : item
+          ),
+        }
+      : current);
+
+    const { error } = await supabase
+      .from("sale_items")
+      .update({ is_checked: isChecked })
+      .eq("id", saleItemId)
+      .eq("sale_id", billId);
+
+    if (error) {
+      setViewing((current) => current && current.id === billId
+        ? {
+            ...current,
+            quotation_items: current.quotation_items.map((item) =>
+              item.sale_item_id === saleItemId ? { ...item, is_checked: previousValue } : item
+            ),
+          }
+        : current);
+      showToast(error.message, "error");
+    } else {
+      await reloadSales();
+    }
+
+    setUpdatingBillItems((current) => {
+      const next = new Set(current);
+      next.delete(saleItemId);
+      return next;
     });
   };
 
@@ -872,14 +926,27 @@ export function SalesClient() {
 
             <div className="panel" style={{ maxHeight: "300px", overflowY: "auto" }}>
               <div className="table-scroll">
-                <Table headers={["Sr", "Item", "Qty", "Price", "Amount"]}>
+                <Table headers={viewingType === "bill" ? ["Sr", "Item", "Qty", "Price", "Amount", "Checked"] : ["Sr", "Item", "Qty", "Price", "Amount"]}>
                   {viewing.quotation_items.map((it, idx) => (
-                    <tr key={idx}>
+                    <tr key={it.sale_item_id ?? idx}>
                       <Td>{idx + 1}</Td>
                       <Td>{it.item_name}</Td>
                       <Td className="num">{it.quantity}</Td>
                       <Td className="num">{money(it.selling_price)}</Td>
                       <Td className="strong num">{money(it.quantity * it.selling_price)}</Td>
+                      {viewingType === "bill" && (
+                        <Td>
+                          <input
+                            type="checkbox"
+                            aria-label={`Mark ${it.item_name} as checked`}
+                            checked={it.is_checked ?? false}
+                            disabled={!it.sale_item_id || updatingBillItems.has(it.sale_item_id)}
+                            onChange={(event) => {
+                              if (it.sale_item_id) updateBillItemChecked(it.sale_item_id, event.target.checked);
+                            }}
+                          />
+                        </Td>
+                      )}
                     </tr>
                   ))}
                 </Table>
