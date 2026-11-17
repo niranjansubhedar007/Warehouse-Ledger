@@ -20,7 +20,7 @@ export function ItemsClient() {
 
   const loadPage = useCallback(async (page: number, query: string) => {
     const from = (page - 1) * 10;
-    let request = supabase.from("items").select("*", { count: "exact" }).order("name").range(from, from + 9);
+    let request = supabase.from("items").select("*", { count: "exact" }).order("created_at", { ascending: false }).range(from, from + 9);
     if (query.trim()) request = request.ilike("name", `%${query.trim()}%`);
     const { data, error, count } = await request;
     if (error) showToast(error.message, "error");

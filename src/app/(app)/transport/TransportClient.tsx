@@ -18,7 +18,7 @@ export function TransportClient() {
 
   const loadPage = useCallback(async (page: number, query: string) => {
     const from = (page - 1) * 10;
-    let request = supabase.from("transport_charges").select("*", { count: "exact" }).order("date", { ascending: false }).range(from, from + 9);
+    let request = supabase.from("transport_charges").select("*", { count: "exact" }).order("created_at", { ascending: false }).range(from, from + 9);
     if (query.trim()) {
       request = request.or(`description.ilike.%${query.trim()}%,provider.ilike.%${query.trim()}%,reference_number.ilike.%${query.trim()}%`);
     }

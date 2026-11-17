@@ -6,6 +6,18 @@ import { useToast } from "@/components/ToastProvider";
 import { PageHeader, Table, Td, SearchBar, Pagination, Badge } from "@/components/ui";
 import { formatDate, money } from "@/lib/format";
 
+interface QuotationReportRow {
+  id: string | number;
+  quotation_number: string;
+  date: string;
+  customer_name: string;
+  subtotal: number;
+  tax: number;
+  shipping_charge: number;
+  grand_total: number;
+  status: string;
+}
+
 export function QuotationReportClient() {
   const supabase = createClient();
   const showToast = useToast();
@@ -30,7 +42,7 @@ export function QuotationReportClient() {
 
     const { data, error, count } = await request;
     if (error) showToast(error.message, "error");
-    return { data: (data || []), total: count || 0 };
+    return { data: (data || []) as QuotationReportRow[], total: count || 0 };
   }, [supabase, showToast, status, startDate, endDate]);
 
   const list = useServerPagedList(loadPage);
@@ -78,7 +90,7 @@ export function QuotationReportClient() {
             ) : data.length === 0 ? (
               <tr><Td colSpan={9} className="text-muted">No quotations found.</Td></tr>
             ) : (
-              data.map((q: any, idx: number) => (
+              data.map((q: QuotationReportRow, idx: number) => (
                 <tr key={q.id}>
                   <Td>{(page - 1) * pageSize + idx + 1}</Td>
                   <Td className="mono">{q.quotation_number}</Td>

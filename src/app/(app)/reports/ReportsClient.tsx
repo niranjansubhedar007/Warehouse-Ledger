@@ -71,16 +71,16 @@ export function ReportsClient({ report }: { report: "sales" | "purchase" | "prof
     const items = (itemsRes.data || []) as Item[];
     const itemName = (id: string) => items.find((i) => i.id === id)?.name || "—";
 
-    let salesQuery = supabase.from("sales").select("id, bill_number, date, customer_name, grand_total, tax, shipping_charge").order("date", { ascending: false }).limit(2000);
+    let salesQuery = supabase.from("sales").select("id, bill_number, date, customer_name, grand_total, tax, shipping_charge").order("created_at", { ascending: false }).limit(2000);
     if (startDate) salesQuery = salesQuery.gte("date", startDate);
     if (endDate) salesQuery = salesQuery.lte("date", endDate);
     const salesRes = await salesQuery;
 
-    let purchaseQuery = supabase.from("purchases").select("*").order("date", { ascending: false }).limit(2000);
+    let purchaseQuery = supabase.from("purchases").select("*").order("created_at", { ascending: false }).limit(2000);
     if (startDate) purchaseQuery = purchaseQuery.gte("date", startDate);
     if (endDate) purchaseQuery = purchaseQuery.lte("date", endDate);
     const purchaseRes = await purchaseQuery;
-    let transportQuery = supabase.from("transport_charges").select("*").order("date", { ascending: false }).limit(2000);
+    let transportQuery = supabase.from("transport_charges").select("*").order("created_at", { ascending: false }).limit(2000);
     if (startDate) transportQuery = transportQuery.gte("date", startDate);
     if (endDate) transportQuery = transportQuery.lte("date", endDate);
     const transportRes = await transportQuery;
@@ -92,6 +92,7 @@ export function ReportsClient({ report }: { report: "sales" | "purchase" | "prof
     const sales = salesRes.data || [];
     const saleIds = sales.map((s) => s.id);
     const saleById = new Map(sales.map((s) => [s.id, s]));
+    const saleOrder = new Map(sales.map((sale, index) => [sale.id, index]));
 
     let saleItems: { sale_id: string; item_id: string; quantity: number; selling_price: number; purchase_price: number; shipping_weight: number; profit: number }[] = [];
     if (saleIds.length > 0) {
@@ -103,22 +104,24 @@ export function ReportsClient({ report }: { report: "sales" | "purchase" | "prof
       else saleItems = data || [];
     }
 
-    const flatSalesRows: SaleLineRow[] = saleItems.map((l) => {
-      const sale = saleById.get(l.sale_id);
-      return {
-        bill_number: sale?.bill_number || "",
-        date: sale?.date || "",
-        customer_name: sale?.customer_name || "",
-        item_name: itemName(l.item_id),
-        quantity: Number(l.quantity),
-        shipping_weight: Number(l.shipping_weight),
-        purchase_price: Number(l.purchase_price),
-        selling_price: Number(l.selling_price),
-        profit: Number(l.profit),
-        tax: Number(sale?.tax || 0),
-        shipping_charge: Number(sale?.shipping_charge || 0),
-      };
-    });
+    const flatSalesRows: SaleLineRow[] = [...saleItems]
+      .sort((a, b) => (saleOrder.get(a.sale_id) ?? Infinity) - (saleOrder.get(b.sale_id) ?? Infinity))
+      .map((l) => {
+        const sale = saleById.get(l.sale_id);
+        return {
+          bill_number: sale?.bill_number || "",
+          date: sale?.date || "",
+          customer_name: sale?.customer_name || "",
+          item_name: itemName(l.item_id),
+          quantity: Number(l.quantity),
+          shipping_weight: Number(l.shipping_weight),
+          purchase_price: Number(l.purchase_price),
+          selling_price: Number(l.selling_price),
+          profit: Number(l.profit),
+          tax: Number(sale?.tax || 0),
+          shipping_charge: Number(sale?.shipping_charge || 0),
+        };
+      });
 
     const flatPurchaseRows: PurchaseRow[] = (purchaseRes.data || []).map((p) => ({
       id: p.id,

@@ -22,7 +22,7 @@ interface SaleRow {
   tax: number;
   shipping_charge: number;
   grand_total: number;
-  sale_items: { id: string; item_id: string; quantity: number; shipping_weight: number; selling_price: number; item_name: string; is_checked: boolean }[];
+  sale_items: { id: string; item_id: string; quantity: number; shipping_weight: number; selling_price: number; item_name: string; is_checked: boolean; profit?: number }[];
 }
 
 type ViewDocument = Omit<QuotationRow, "quotation_items"> & {
@@ -32,7 +32,7 @@ type ViewDocument = Omit<QuotationRow, "quotation_items"> & {
   })[];
 };
 
-export function SalesClient() {
+export function SalesClient({ isAdmin }: { isAdmin: boolean }) {
   const supabase = createClient();
   const showToast = useToast();
   const [items, setItems] = useState<Item[]>([]);
@@ -69,7 +69,10 @@ export function SalesClient() {
 
   const loadSalesPage = useCallback(async (page: number, query: string) => {
     const from = (page - 1) * 10;
-    let request = supabase.from("sales").select("id, bill_number, date, customer_name, customer_mobile, subtotal, discount, tax, shipping_charge, grand_total, sale_items(id, quantity, selling_price, item_id, is_checked, items(name))", { count: "exact" }).order("created_at", { ascending: false }).range(from, from + 9);
+    const saleItemsSelection = isAdmin
+      ? "sale_items(id, quantity, selling_price, item_id, is_checked, profit, items(name))"
+      : "sale_items(id, quantity, selling_price, item_id, is_checked, items(name))";
+    let request = supabase.from("sales").select(`id, bill_number, date, customer_name, customer_mobile, subtotal, discount, tax, shipping_charge, grand_total, ${saleItemsSelection}`, { count: "exact" }).order("created_at", { ascending: false }).range(from, from + 9);
     if (query.trim()) request = request.or(`bill_number.ilike.%${query.trim()}%,customer_name.ilike.%${query.trim()}%,customer_mobile.ilike.%${query.trim()}%`);
     const { data, error, count } = await request;
     if (error) showToast(error.message, "error");
@@ -90,7 +93,7 @@ export function SalesClient() {
       return { data: enrichedData as unknown as SaleRow[], total: count || 0 };
     }
     return { data: [] as unknown as SaleRow[], total: count || 0 };
-  }, [supabase, showToast]);
+  }, [supabase, showToast, isAdmin]);
 
   const salesList = useServerPagedList(loadSalesPage);
   const { data: sales, loading: salesLoading, reload: reloadSales, query: salesQuery, setQuery: setSalesQuery, page: salesPage, setPage: setSalesPage, totalPages: salesTotalPages, totalCount: salesTotalCount, pageSize: salesPageSize } = salesList;
@@ -803,14 +806,15 @@ export function SalesClient() {
               </div>
               <div className="panel">
                 <div className="table-scroll">
-                  <Table headers={["Sr", "Bill No", "Date", "Customer", "Items", "Weight", "Subtotal", "Discount", "Grand Total", "Actions"]}>
+                  <Table headers={["Sr", "Bill No", "Date", "Customer", "Items", "Weight", "Subtotal", "Discount", "Grand Total", ...(isAdmin ? ["Profit"] : []), "Actions"]}>
                     {salesLoading ? (
-                      <tr><Td colSpan={10} className="text-muted">Loading…</Td></tr>
+                      <tr><Td colSpan={isAdmin ? 11 : 10} className="text-muted">Loading…</Td></tr>
                     ) : sales.length === 0 ? (
-                      <tr><Td colSpan={10} className="text-muted">No bills match your search.</Td></tr>
+                      <tr><Td colSpan={isAdmin ? 11 : 10} className="text-muted">No bills match your search.</Td></tr>
                     ) : (
                       sales.map((s, idx) => {
                         const totalWeight = s.sale_items.reduce((a, l) => a + Number(l.shipping_weight), 0);
+                        const totalProfit = isAdmin ? s.sale_items.reduce((total, item) => total + Number(item.profit ?? 0), 0) : 0;
                         return (
                           <tr key={s.id}>
                             <Td>{(salesPage - 1) * salesPageSize + idx + 1}</Td>
@@ -822,6 +826,7 @@ export function SalesClient() {
                             <Td className="num">{money(s.subtotal)}</Td>
                             <Td className="num">{money(s.discount)}</Td>
                             <Td className="strong num">{money(Math.abs(Number(s.grand_total)))}</Td>
+                            {isAdmin && <Td className="text-success num">{money(totalProfit)}</Td>}
                             <Td>
                               <div style={{ display: "flex", gap: 8 }}>
                                 <button

@@ -18,7 +18,7 @@ export function StockClient() {
   const load = useCallback(async () => {
     setLoading(true);
     const [itemsRes, txRes] = await Promise.all([
-      supabase.from("items").select("*").order("name"),
+      supabase.from("items").select("*").order("created_at", { ascending: false }),
       supabase.from("stock_transactions").select("*").order("created_at", { ascending: false }).limit(500),
     ]);
     if (itemsRes.error) showToast(itemsRes.error.message);
