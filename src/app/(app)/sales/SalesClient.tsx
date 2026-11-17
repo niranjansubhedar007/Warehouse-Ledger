@@ -72,7 +72,7 @@ export function SalesClient({ isAdmin }: { isAdmin: boolean }) {
     const saleItemsSelection = isAdmin
       ? "sale_items(id, quantity, selling_price, item_id, is_checked, profit, items(name))"
       : "sale_items(id, quantity, selling_price, item_id, is_checked, items(name))";
-    let request = supabase.from("sales").select(`id, bill_number, date, customer_name, customer_mobile, subtotal, discount, tax, shipping_charge, grand_total, ${saleItemsSelection}`, { count: "exact" }).order("created_at", { ascending: false }).range(from, from + 9);
+    let request = supabase.from("sales").select(`id, bill_number, date, customer_name, customer_mobile, subtotal, discount, tax, shipping_charge, grand_total, ${saleItemsSelection}`, { count: "exact" }).order("date", { ascending: false }).order("created_at", { ascending: false }).range(from, from + 9);
     if (query.trim()) request = request.or(`bill_number.ilike.%${query.trim()}%,customer_name.ilike.%${query.trim()}%,customer_mobile.ilike.%${query.trim()}%`);
     const { data, error, count } = await request;
     if (error) showToast(error.message, "error");
@@ -100,7 +100,7 @@ export function SalesClient({ isAdmin }: { isAdmin: boolean }) {
 
   const loadQuotationsPage = useCallback(async (page: number, query: string) => {
     const from = (page - 1) * 10;
-    let request = supabase.from("quotations").select("id, quotation_number, date, customer_name, customer_mobile, subtotal, discount, tax, shipping_charge, grand_total, status, quotation_items(quantity, selling_price, item_id, items(name)), sales(id, bill_number)", { count: "exact" }).order("created_at", { ascending: false }).range(from, from + 9);
+    let request = supabase.from("quotations").select("id, quotation_number, date, customer_name, customer_mobile, subtotal, discount, tax, shipping_charge, grand_total, status, quotation_items(quantity, selling_price, item_id, items(name)), sales(id, bill_number)", { count: "exact" }).order("date", { ascending: false }).order("created_at", { ascending: false }).range(from, from + 9);
     if (query.trim()) request = request.or(`quotation_number.ilike.%${query.trim()}%,customer_name.ilike.%${query.trim()}%,customer_mobile.ilike.%${query.trim()}%`);
     if (quotationStatus) request = request.eq("status", quotationStatus);
     if (quotationStartDate) request = request.gte("date", quotationStartDate);
@@ -169,6 +169,7 @@ export function SalesClient({ isAdmin }: { isAdmin: boolean }) {
       .from("quotations")
       .select("id, quotation_number, date, customer_name, customer_mobile, subtotal, discount, tax, shipping_charge, grand_total, status, quotation_items(quantity, selling_price, item_id), sales(id, bill_number)")
       .eq("status", "done")
+      .order("date", { ascending: false })
       .order("created_at", { ascending: false });
 
     if (error) {

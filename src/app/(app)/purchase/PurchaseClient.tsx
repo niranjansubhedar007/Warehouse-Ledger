@@ -29,7 +29,7 @@ export function PurchaseClient() {
 
   const loadPage = useCallback(async (page: number, query: string) => {
     const from = (page - 1) * 10;
-    let request = supabase.from("purchases").select("*", { count: "exact" }).order("created_at", { ascending: false }).range(from, from + 9);
+    let request = supabase.from("purchases").select("*", { count: "exact" }).order("date", { ascending: false }).order("created_at", { ascending: false }).range(from, from + 9);
     if (query.trim()) request = request.or(`invoice_number.ilike.%${query.trim()}%,supplier.ilike.%${query.trim()}%`);
     const purchasesRes = await request;
     if (purchasesRes.error) showToast(purchasesRes.error.message, "error");

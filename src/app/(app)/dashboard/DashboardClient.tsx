@@ -11,7 +11,7 @@ interface SaleRow {
   date: string;
   grand_total: number;
   discount: number;
-  sale_items: { quantity: number; selling_price: number; purchase_price: number }[];
+  sale_items: { quantity: number; selling_price: number; purchase_price: number; profit: number }[];
 }
 interface PurchaseRow {
   date: string;
@@ -36,9 +36,9 @@ type PresetRange = "today" | "yesterday" | "7d" | "30d";
 export function DashboardClient() {
   const supabase = createClient();
   const showToast = useToast();
-  const [range, setRange] = useState<PresetRange | "custom">("7d");
-  const [startDate, setStartDate] = useState(() => daysAgoISO(6));
-  const [endDate, setEndDate] = useState(() => daysAgoISO(0));
+  const [range, setRange] = useState<PresetRange | "custom">("custom");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [items, setItems] = useState<Item[]>([]);
   const [sales, setSales] = useState<SaleRow[]>([]);
   const [purchases, setPurchases] = useState<PurchaseRow[]>([]);
@@ -48,28 +48,46 @@ export function DashboardClient() {
   const load = useCallback(async () => {
     const currentRequestId = ++requestId.current;
     setLoading(true);
-    let salesQuery = supabase.from("sales").select("date, grand_total, discount, sale_items(quantity, selling_price, purchase_price)");
-    let purchasesQuery = supabase.from("purchases").select("date, total_amount");
-    if (startDate) {
-      salesQuery = salesQuery.gte("date", startDate);
-      purchasesQuery = purchasesQuery.gte("date", startDate);
-    }
-    if (endDate) {
-      salesQuery = salesQuery.lte("date", endDate);
-      purchasesQuery = purchasesQuery.lte("date", endDate);
-    }
+    const fetchSales = async () => {
+      const rows: SaleRow[] = [];
+      for (let from = 0; ; from += 1000) {
+        let query = supabase.from("sales").select("date, grand_total, discount, sale_items(quantity, selling_price, purchase_price, profit)");
+        if (startDate) query = query.gte("date", startDate);
+        if (endDate) query = query.lte("date", endDate);
+        const { data, error } = await query.order("date", { ascending: false }).order("created_at", { ascending: false }).range(from, from + 999);
+        if (error) return { rows: null, error };
+        const batch = (data || []) as unknown as SaleRow[];
+        rows.push(...batch);
+        if (batch.length < 1000) break;
+      }
+      return { rows, error: null };
+    };
+    const fetchPurchases = async () => {
+      const rows: PurchaseRow[] = [];
+      for (let from = 0; ; from += 1000) {
+        let query = supabase.from("purchases").select("date, total_amount");
+        if (startDate) query = query.gte("date", startDate);
+        if (endDate) query = query.lte("date", endDate);
+        const { data, error } = await query.order("date", { ascending: false }).order("created_at", { ascending: false }).range(from, from + 999);
+        if (error) return { rows: null, error };
+        const batch = (data || []) as PurchaseRow[];
+        rows.push(...batch);
+        if (batch.length < 1000) break;
+      }
+      return { rows, error: null };
+    };
     const [itemsRes, salesRes, purchasesRes] = await Promise.all([
       supabase.from("items").select("*").order("current_stock", { ascending: true }),
-      salesQuery,
-      purchasesQuery,
+      fetchSales(),
+      fetchPurchases(),
     ]);
     if (currentRequestId !== requestId.current) return;
     if (itemsRes.error) showToast(itemsRes.error.message, "error");
     else setItems(itemsRes.data as Item[]);
     if (salesRes.error) showToast(salesRes.error.message, "error");
-    else setSales(salesRes.data as unknown as SaleRow[]);
+    else if (salesRes.rows) setSales(salesRes.rows);
     if (purchasesRes.error) showToast(purchasesRes.error.message, "error");
-    else setPurchases(purchasesRes.data as PurchaseRow[]);
+    else if (purchasesRes.rows) setPurchases(purchasesRes.rows);
     setLoading(false);
   }, [supabase, showToast, startDate, endDate]);
 
@@ -103,12 +121,9 @@ export function DashboardClient() {
   const periodSales = sales.reduce((sum, sale) => sum + Number(sale.grand_total), 0);
   const periodPurchase = purchases.reduce((sum, purchase) => sum + Number(purchase.total_amount), 0);
   const periodProfit = sales.reduce((sum, s) => {
-      const itemProfit = s.sale_items.reduce(
-        (subtotal, line) => subtotal + (Number(line.selling_price) - Number(line.purchase_price)) * Number(line.quantity),
-        0
-      );
-      return sum + itemProfit - Number(s.discount || 0);
-    }, 0);
+    const itemProfit = s.sale_items.reduce((subtotal, line) => subtotal + Number(line.profit), 0);
+    return sum + itemProfit - Number(s.discount || 0);
+  }, 0);
 
   const chartData = useMemo(() => {
     const start = startDate ? new Date(`${startDate}T00:00:00`) : null;
@@ -116,7 +131,7 @@ export function DashboardClient() {
     const rangeLength = start && end
       ? (Date.UTC(end.getFullYear(), end.getMonth(), end.getDate()) - Date.UTC(start.getFullYear(), start.getMonth(), start.getDate())) / 86_400_000
       : null;
-    const groupByMonth = rangeLength !== null && rangeLength > 30;
+    const groupByMonth = !start || !end || (rangeLength !== null && rangeLength > 30);
     const totals = new Map<string, number>();
     for (const sale of sales) {
       const key = groupByMonth
@@ -144,7 +159,7 @@ export function DashboardClient() {
 
   return (
     <div>
-      <PageHeader title="Dashboard" subtitle="Sales, purchases and profit for the selected date range, with current stock status." />
+      <PageHeader title="Dashboard" subtitle="Sales, purchases and profit show all-time totals unless you select a date range." />
       <div className="list-toolbar" style={{ justifyContent: "flex-end" }}>
         <div className="date-field">
           <input
@@ -168,7 +183,7 @@ export function DashboardClient() {
         </div>
       </div>
       <p className="text-muted" style={{ fontSize: 12, marginTop: -12, marginBottom: 16 }}>
-        The date range applies to Sales, Purchase and Profit. Low Stock Items shows the current stock status.
+        The date range applies to Sales, Purchase, Profit and the chart. Low Stock Items shows the current stock status.
       </p>
       <div className="stat-grid">
         <StatCard label="Sales" value={loading ? "…" : money(Math.abs(periodSales))} color="var(--green)" />

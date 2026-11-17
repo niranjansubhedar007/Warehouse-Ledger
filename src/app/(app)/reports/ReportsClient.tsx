@@ -50,11 +50,30 @@ interface TransportRow {
   amount: number;
 }
 
+interface ProfitSummarySale {
+  grand_total: number;
+  discount: number | null;
+  sale_items: { profit: number }[];
+}
+
+const localISODate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const currentMonthStartISO = () => {
+  const date = new Date();
+  date.setDate(1);
+  return localISODate(date);
+};
+
 export function ReportsClient({ report }: { report: "sales" | "purchase" | "profit" | "transport" }) {
   const supabase = createClient();
   const showToast = useToast();
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [startDate, setStartDate] = useState(() => report === "profit" ? "" : currentMonthStartISO());
+  const [endDate, setEndDate] = useState(() => report === "profit" ? "" : localISODate(new Date()));
   const [loading, setLoading] = useState(true);
 
   const [salesRows, setSalesRows] = useState<SaleLineRow[]>([]);
@@ -71,16 +90,26 @@ export function ReportsClient({ report }: { report: "sales" | "purchase" | "prof
     const items = (itemsRes.data || []) as Item[];
     const itemName = (id: string) => items.find((i) => i.id === id)?.name || "—";
 
-    let salesQuery = supabase.from("sales").select("id, bill_number, date, customer_name, grand_total, tax, shipping_charge").order("created_at", { ascending: false }).limit(2000);
+    let salesQuery = supabase.from("sales").select("id, bill_number, date, customer_name, grand_total, discount, tax, shipping_charge, sale_items(item_id, quantity, selling_price, purchase_price, shipping_weight, profit)").order("date", { ascending: false }).order("created_at", { ascending: false }).limit(2000);
     if (startDate) salesQuery = salesQuery.gte("date", startDate);
     if (endDate) salesQuery = salesQuery.lte("date", endDate);
     const salesRes = await salesQuery;
+    let allTimeSales: ProfitSummarySale[] | null = null;
+    if (report === "profit" && !startDate && !endDate) {
+      const { data, error } = await supabase
+        .from("sales")
+        .select("grand_total, discount, sale_items(profit)")
+        .order("created_at", { ascending: false })
+        .limit(2000);
+      if (error) showToast(error.message);
+      else allTimeSales = data as ProfitSummarySale[];
+    }
 
-    let purchaseQuery = supabase.from("purchases").select("*").order("created_at", { ascending: false }).limit(2000);
+    let purchaseQuery = supabase.from("purchases").select("*").order("date", { ascending: false }).order("created_at", { ascending: false }).limit(2000);
     if (startDate) purchaseQuery = purchaseQuery.gte("date", startDate);
     if (endDate) purchaseQuery = purchaseQuery.lte("date", endDate);
     const purchaseRes = await purchaseQuery;
-    let transportQuery = supabase.from("transport_charges").select("*").order("created_at", { ascending: false }).limit(2000);
+    let transportQuery = supabase.from("transport_charges").select("*").order("date", { ascending: false }).order("created_at", { ascending: false }).limit(2000);
     if (startDate) transportQuery = transportQuery.gte("date", startDate);
     if (endDate) transportQuery = transportQuery.lte("date", endDate);
     const transportRes = await transportQuery;
@@ -90,19 +119,12 @@ export function ReportsClient({ report }: { report: "sales" | "purchase" | "prof
     if (transportRes.error) showToast(transportRes.error.message);
 
     const sales = salesRes.data || [];
-    const saleIds = sales.map((s) => s.id);
     const saleById = new Map(sales.map((s) => [s.id, s]));
     const saleOrder = new Map(sales.map((sale, index) => [sale.id, index]));
 
-    let saleItems: { sale_id: string; item_id: string; quantity: number; selling_price: number; purchase_price: number; shipping_weight: number; profit: number }[] = [];
-    if (saleIds.length > 0) {
-      const { data, error } = await supabase
-        .from("sale_items")
-        .select("sale_id, item_id, quantity, selling_price, purchase_price, shipping_weight, profit")
-        .in("sale_id", saleIds);
-      if (error) showToast(error.message);
-      else saleItems = data || [];
-    }
+    const saleItems = sales.flatMap((sale) =>
+      (sale.sale_items || []).map((line) => ({ ...line, sale_id: sale.id }))
+    );
 
     const flatSalesRows: SaleLineRow[] = [...saleItems]
       .sort((a, b) => (saleOrder.get(a.sale_id) ?? Infinity) - (saleOrder.get(b.sale_id) ?? Infinity))
@@ -159,10 +181,14 @@ export function ReportsClient({ report }: { report: "sales" | "purchase" | "prof
     setPurchaseRows(flatPurchaseRows);
     setProfitRows(flatProfitRows);
     setTransportRows(flatTransportRows);
-    setTotalRevenue(sales.reduce((s, sale) => s + Number(sale.grand_total), 0));
-    setTotalProfit(flatSalesRows.reduce((s, r) => s + r.profit, 0));
+    if (report === "profit") {
+      const summarySales = allTimeSales || sales;
+      setTotalRevenue(summarySales.reduce((sum, sale) => sum + Number(sale.grand_total), 0));
+      setTotalProfit(summarySales.reduce((sum, sale) =>
+        sum + (sale.sale_items || []).reduce((saleProfit, line) => saleProfit + Number(line.profit), 0) - Number(sale.discount || 0), 0));
+    }
     setLoading(false);
-  }, [supabase, showToast, startDate, endDate]);
+  }, [supabase, showToast, startDate, endDate, report]);
 
   useEffect(() => {
     load();

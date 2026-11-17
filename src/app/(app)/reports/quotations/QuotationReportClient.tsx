@@ -30,6 +30,7 @@ export function QuotationReportClient() {
     let request = supabase
       .from("quotations")
       .select("id, quotation_number, date, customer_name, subtotal, tax, shipping_charge, grand_total, status", { count: "exact" })
+      .order("date", { ascending: false })
       .order("created_at", { ascending: false })
       .range(from, from + 9);
 
