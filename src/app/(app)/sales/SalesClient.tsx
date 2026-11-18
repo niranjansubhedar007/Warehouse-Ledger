@@ -325,31 +325,7 @@ export function SalesClient({ isAdmin }: { isAdmin: boolean }) {
     reloadSales();
   };
 
-  const downloadQuotationPDF = async (quotation: QuotationRow) => {
-    const requiredByItem = new Map<string, number>();
-    for (const line of quotation.quotation_items) {
-      requiredByItem.set(line.item_id, (requiredByItem.get(line.item_id) || 0) + Number(line.quantity));
-    }
-    const itemIds = Array.from(requiredByItem.keys());
-    const { data, error } = await supabase
-      .from("items")
-      .select("id, current_stock")
-      .in("id", itemIds);
-
-    if (error) {
-      showToast(error.message, "error");
-      return;
-    }
-    const stockByItem = new Map(data.map((item) => [item.id, item.current_stock]));
-    const unavailable = Array.from(requiredByItem.entries()).find(
-      ([itemId, required]) => (stockByItem.get(itemId) ?? -1) < required
-    );
-    if (unavailable) {
-      showToast("Cannot download the PDF: one or more items do not have enough stock.", "error");
-      reloadQuotes();
-      return;
-    }
-
+  const downloadQuotationPDF = (quotation: QuotationRow) => {
     downloadPDF(quotation);
   };
 
@@ -680,11 +656,9 @@ export function SalesClient({ isAdmin }: { isAdmin: boolean }) {
                             <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => setEditing(q)}>
                               <Pencil size={14} /> Edit
                             </button>
-                            {hasSufficientStock(q) && (
-                              <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => downloadQuotationPDF(q)}>
-                                <Download size={14} /> PDF
-                              </button>
-                            )}
+                            <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => downloadQuotationPDF(q)}>
+                              <Download size={14} /> PDF
+                            </button>
                             <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => setConfirmAction({ modalTitle: "Update Status", title: `Mark as ${q.status === "pending" ? "Done" : "Pending"}?`, onConfirm: () => updateQuotationStatus(q.id, q.status === "pending" ? "done" : "pending") })}>
                               {q.status === "pending" ? <><CheckCircle size={14} /> Done</> : <><Clock size={14} /> Pending</>}
                             </button>
