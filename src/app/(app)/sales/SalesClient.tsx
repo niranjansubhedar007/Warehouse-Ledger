@@ -650,7 +650,7 @@ export function SalesClient({ isAdmin }: { isAdmin: boolean }) {
                           </div>
                         ) : (
                           <div style={{ display: "flex", gap: 8 }}>
-                            <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => { setViewingType("quotation"); setViewing(q); }}>
+                            <button className="btn-secondary" title={q.status === "done" && !hasSufficientStock(q) ? getStockWarning(q) : undefined} style={{ padding: '4px 8px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => { setViewingType("quotation"); setViewing(q); }}>
                               <Eye size={14} /> View
                             </button>
                             <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => setEditing(q)}>
@@ -665,25 +665,14 @@ export function SalesClient({ isAdmin }: { isAdmin: boolean }) {
                             <button className="btn-secondary text-danger" style={{ padding: '4px 8px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => setConfirmAction({ modalTitle: "Reject Quotation", title: "Reject this quotation?", onConfirm: () => updateQuotationStatus(q.id, "rejected") })}>
                               <X size={14} /> Reject
                             </button>
-                            {q.status === "done" && (
-                              hasSufficientStock(q) ? (
-                                <button
-                                  className="btn-primary"
-                                  style={{ padding: '4px 8px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}
-                                  onClick={() => setConfirmAction({ modalTitle: "Convert to Bill", title: "Convert this quotation to a final bill?", onConfirm: () => convertToBill(q.id) })}
-                                >
-                                  <FileText size={14} /> Create Bill
-                                </button>
-                              ) : (
-                                <button
-                                  className="btn-secondary"
-                                  style={{ padding: '4px 8px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}
-                                  title={getStockWarning(q)}
-                                  onClick={() => { setViewingType("quotation"); setViewing(q); }}
-                                >
-                                  <Eye size={14} /> View 
-                                </button>
-                              )
+                            {q.status === "done" && hasSufficientStock(q) && (
+                              <button
+                                className="btn-primary"
+                                style={{ padding: '4px 8px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}
+                                onClick={() => setConfirmAction({ modalTitle: "Convert to Bill", title: "Convert this quotation to a final bill?", onConfirm: () => convertToBill(q.id) })}
+                              >
+                                <FileText size={14} /> Create Bill
+                              </button>
                             )}
                           </div>
                         )}
